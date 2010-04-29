@@ -116,17 +116,6 @@
   "Prefix key sequence for git commands."
   :group 'git)
 
-(defcustom git-debug nil
-  "When true, the *git output* buffer is never deleted"
-  :type 'boolean
-  :group 'git)
-
-(defvar git-hunks-scan-pos (point-min)
-  "The point that `git-hunks-filter' should start scanning from")
-
-(defvar git-responses nil
-  "Patch responses for the currently-running interactive darcs process")
-
 
 ;;;; ============================================== Keymaps =============================================
 
@@ -180,9 +169,9 @@
   (let ((map (make-sparse-keymap 'git-whatsnew-map)))
     (set-keymap-parent map git-hunk-display-map)
     (define-key map [(control ?c) (control ?s)] 'git-stage-from-whatsnew)
-    (define-key map [(control ?c) (control ?c)] 'git-record-from-whatsnew)
+    (define-key map [(control ?c) (control ?c)] 'git-commit-from-whatsnew)
 ;    (define-key map [(control ?c) (control ?r)] 'git-commit-revert)
-    (define-key map [(control ?x) ?#] 'git-record-from-whatsnew)
+    (define-key map [(control ?x) ?#] 'git-commit-from-whatsnew)
     map)
   "Keymap for git-whatsnew-mode")
 
@@ -195,8 +184,8 @@
   (interactive)
   (let ((repo-dir default-directory)) ;TODO `git-repo-dir'
     (if same-window
-      (switch-to-buffer (format "*git whatsnew: (%s)" repo-dir))
-      (switch-to-buffer-other-window (format "*git whatsnew: (%s)" repo-dir)))
+      (switch-to-buffer (format "*git whatsnew: (%s)*" repo-dir))
+      (switch-to-buffer-other-window (format "*git whatsnew: (%s)*" repo-dir)))
     (toggle-read-only 1)
     (setq default-directory repo-dir)
     (let ((inhibit-read-only t))
@@ -208,7 +197,8 @@
                    (goto-char (point-min))
                    (save-excursion
                      (git-markup-hunks)))
-                 (git-whatsnew-mode)))))
+                 (git-whatsnew-mode)
+                 (message nil)))))
 
 (defun git-markup-hunks ()
   "Starting from point and moving down the rest of the buffer,
@@ -344,12 +334,15 @@
 
 (defun git-hunk-beginning (&optional noerror)
   "Returns the position of the beginning of the current hunk"
-  (if (git-hunk-header-p)
-    (point-at-bol)
-    (save-excursion
-      (if (re-search-backward "^@@" nil t)
-        (point)
-        (unless noerror (error "No current hunk"))))))
+  (cond
+    ((git-hunk-header-p)
+     (point-at-bol))
+    ((git-file-header-p)
+     nil)
+    (t (save-excursion
+         (if (re-search-backward "^@@" nil t)
+           (point)
+           (unless noerror (error "No current hunk")))))))
 
 (defun git-hunk-end ()
   "Returns the position of the end of the current hunk"
@@ -411,17 +404,18 @@
 
 (defun git-expand-hunk ()
   "Expand the current hunk"
-  (subst-char-in-region (git-hunk-beginning) (git-hunk-end) ?\^M ?\n))
+  (let ((inhibit-read-only t))
+    (subst-char-in-region (git-hunk-beginning) (git-hunk-end) ?\^M ?\n)))
 
 (defun git-collapse-hunk ()
   "Collapse the current hunk"
-  (subst-char-in-region (git-hunk-beginning) (git-hunk-end) ?\n ?\^M))
+  (let ((inhibit-read-only t))
+    (subst-char-in-region (git-hunk-beginning) (git-hunk-end) ?\n ?\^M)))
 
 (defun git-toggle-hunk-expanded ()
   "Expand or collapse the current hunk"
   (interactive)
-  (let ((inhibit-read-only t)
-        (expanded (save-excursion
+  (let ((expanded (save-excursion
                     (goto-char (git-hunk-beginning))
                     (re-search-forward "\n" (git-hunk-end) t))))
     (if expanded
@@ -516,7 +510,94 @@
                 (< (point) e))
       (git-include-hunk))))
 
+(defun git-collect-responses ()
+  "Collect responses from the current buffer."
+  (save-excursion
+    (goto-char (point-min))
+    (unless (git-file-header-p)
+      (git-next-file))
+    (let ((filename nil)
+          (responses nil))
+      (flet ((update-filename ()
+               (looking-at "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] \\(.*\\) \\(?:\\[deleted\\]\\)?\n")
+               (setq filename (match-string 1)))
+             (response-key ()
+               (looking-at "^@@ [^@]* @@")
+               (let ((hunkid (match-string 0)))
+                 (format "%s/%s" filename hunkid))))
+        (update-filename)
+        (while (zerop (forward-line 1))
+          (cond
+            ((git-file-header-p)
+             (update-filename))
+            ((git-hunk-header-p)
+             (setq responses (cons (cons (response-key)
+                                         (if (git-hunk-excluded-p)
+                                           "n" "y"))
+                                   responses)))))
+        (nreverse responses)))))
+
+(defun git-stage-from-whatsnew ()
+  "Stage the patches that are included in the current whatsnew buffer"
+  (interactive)
+  (let ((responses (git-collect-responses)))
+    (git-hunks default-directory '("add" "--patch") responses
+               (lambda (str)
+                 (git-whatsnew t)
+                 (message "Changes staged")))))
+                 
+(defun git-commit-from-whatsnew ()
+  "Stage the included patches and then commit"
+  (interactive)
+  (let ((responses (git-collect-responses)))
+    (git-hunks default-directory '("add" "--patch") responses
+               (lambda (str)
+                 (darcs-quit-current)
+                 (git-commit)))))
+
+(defvar git-commit-buffer-instructions "
+# Please enter the commit message for your changes.
+# (Comment lines starting with '#' will not be included)
+# On branch %s
+#\\<git-commit-map>
+# Type \\[git-commit-execute] to commit the staged changes.
+# Type \\[kill-buffer] to abandon this commit buffer.
+#
+# The current index status is listed below; you may stage or unstage
+# changes before committing.
+#
+# Changes to be committed:
+")
+
+(defun git-commit (&optional same-window)
+  "Commit the currently staged patches."
+  (interactive)
+  (let ((repo-dir default-directory)  ;TODO `git-repo-dir'
+        (inhibit-read-only t))
+    (if same-window
+      (switch-to-buffer (format "*git commit: (%s)*" repo-dir))
+      (switch-to-buffer-other-window (format "*git commit: (%s)*" repo-dir)))
+    (setq default-directory repo-dir)
+    (erase-buffer)
+    (insert (format (substitute-command-keys git-commit-buffer-instructions)
+                    (git-current-branch)))
+    (git-hunks repo-dir '("diff" "--cached") nil
+               (lambda (str)
+                 (save-excursion (insert str))
+                 (git-markup-hunks)))))
+
+
+(defun git-current-branch ()
+  "Returns the current branch name"
+  (darcs-trim-newlines (shell-command-to-string "git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/\\* \\(.*\\)/\\1/'")))
+
 ;;;; ====================================== git process interaction =====================================
+
+(defvar git-hunks-scan-pos nil
+  "The point that `git-hunks-filter' should start scanning from")
+
+(defvar git-responses nil
+  "Patch responses for the currently-running interactive darcs process")
 
 (defvar git-hunks-thunk nil
   "Function to execute after `git-hunks'")
@@ -556,20 +637,19 @@
     (set-process-filter process 'git-hunks-filter)))
 
 (defun git-hunks-sentinel (proc string)
-  (when (and (string-match "^exited abnormally" string)
+  (flet ((bufstr ()
+           (with-current-buffer (process-buffer proc)
+             (buffer-substring (point-min) (point-max)))))
+    (if (and (string-match "^exited abnormally" string)
              (process-buffer proc))
-    (message "%s: %s" (process-name proc) string))
-  (when (and (not (eq 'run (process-status proc)))
-             (buffer-live-p (process-buffer proc)))
-    (message "") ; Get rid of the command-line message
-    (when git-hunks-thunk
-      (funcall git-hunks-thunk (with-current-buffer (process-buffer proc)
-                                 (buffer-substring (point-min) (point-max)))))
-    (unless git-debug
-      (kill-buffer (process-buffer proc)))))
-
-(defvar git-process-filter-mark-overlay nil
-  "An overlay that highlights the currently unconsumed output in the git output buffer")
+      (message "%s\n%s: %s" (darcs-trim-newlines (bufstr))
+               (process-name proc)
+               (darcs-trim-newlines string))
+      (when (and (not (eq 'run (process-status proc)))
+                 (buffer-live-p (process-buffer proc)))
+        (if git-hunks-thunk
+          (funcall git-hunks-thunk (bufstr))
+          (message nil))))))
 
 (defun git-stage-prompt (&optional opt)
   "Return non-nil if point is looking at a staging prompt.
@@ -623,5 +703,6 @@
 ;; kill-current-buffer-process
 ;; one-line-buffer
 ;; darcs-quit-current
+;; darcs-trim-newlines
 
 ;;; jgit.el ends here
