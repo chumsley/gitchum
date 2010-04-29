@@ -59,9 +59,23 @@
   "Face used to highlight filename portion of filename headers"
   :group 'git)
 
-(defface git-file-header-deleted
+(defface git-file-header-mod
     '((((class color))
-       (:foreground "red"))
+       (:inherit git-context))
+      (t (:bold t)))
+  "Face used to highlight 'mod' tag of filename headers"
+  :group 'git)
+
+(defface git-file-header-del
+    '((((class color))
+       (:inherit git-line-removed))
+      (t (:bold t)))
+  "Face used to highlight 'deleted' tag of filename headers"
+  :group 'git)
+
+(defface git-file-header-new
+    '((((class color))
+       (:inherit git-line-added))
       (t (:bold t)))
   "Face used to highlight 'deleted' tag of filename headers"
   :group 'git)
@@ -585,11 +599,6 @@
                (lambda (str)
                  (save-excursion (insert str))
                  (git-markup-hunks)))))
-
-
-(defun git-current-branch ()
-  "Returns the current branch name"
-  (darcs-trim-newlines (shell-command-to-string "git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/\\* \\(.*\\)/\\1/'")))
 
 ;;;; ====================================== git process interaction =====================================
 
