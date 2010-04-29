@@ -1,6 +1,4 @@
 ;;TODO
-;; 1. Get file headings highlighting properly
-;; 2. whatsnew navigation
 ;; 3. collapsing/expanding hunks
 ;; 4. selecting/deselecting hunks
 ;;
@@ -166,6 +164,8 @@
     (define-key map [(control return)] 'git-find-hunk-in-other-window)
     (define-key map [?j] 'git-next-hunk)
     (define-key map [?k] 'git-prev-hunk)
+    (define-key map [?J] 'git-next-file)
+    (define-key map [?K] 'git-prev-file)
     (define-key map [?y] 'git-include-hunk)
     (define-key map [?x] 'git-exclude-hunk)
     (define-key map [?s] 'git-exclude-all-in-current-file)
@@ -304,13 +304,141 @@
     ))
 
 (define-derived-mode git-whatsnew-mode fundamental-mode
+  (kill-all-local-variables)
   (setq font-lock-defaults '((git-whatsnew-font-lock-keywords))) ; Is this the right way to do this?
   (setq mode-name "git-whatsnew")
   (use-local-map git-whatsnew-map)
   (setq revert-buffer-function (lambda (ignore-auto noconfirm)
-                                 (git-whatsnew t))))
+                                 (git-whatsnew t)))
+  (setq selective-display t))
 
+(defun git-file-header-p ()
+  "Non-nil if point is currently on a file header line"
+  (save-excursion
+    (goto-char (point-at-bol))
+    (looking-at "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] ")))
+
+(defun git-hunk-header-p ()
+  "Non-nil if point is currently on a hunk header line"
+  (save-excursion
+    (goto-char (point-at-bol))
+    (looking-at "^@@")))
+
+(defun git-hunk-beginning ()
+  "Returns the position of the beginning of the current hunk"
+  (if (git-hunk-header-p)
+    (point-at-bol)
+    (save-excursion
+      (if (re-search-backward "^@@" nil t)
+        (point)
+        (error "No current hunk")))))
+
+(defun git-hunk-end ()
+  "Returns the position of the end of the current hunk"
+  (save-excursion
+    (goto-char (git-hunk-beginning))
+    (while (and (zerop (forward-line 1))
+                (not (git-file-header-p))
+                (not (git-hunk-header-p))))
+      (when (= (point) (point-at-bol))
+        (forward-line -1))
+      (point-at-eol)))
+
+(defun git-next-hunk (&optional noerror)
+  "Move point to the beginning of the next hunk"
+  (interactive)
+  (let ((p (save-excursion
+             (goto-char (point-at-eol))
+             (and (re-search-forward "^@@" nil t)
+                  (match-beginning 0)))))
+    (if p
+      (goto-char p)
+      (unless noerror (error "No more patches")))))
+
+(defun git-prev-hunk (&optional noerror)
+  "Move point to the beginning of the previous hunk"
+  (interactive)
+  (let ((p (save-excursion
+             (goto-char (git-hunk-beginning))
+             (and (re-search-backward "^@@" nil t)
+                  (match-beginning 0)))))
+               
+    (if p
+      (goto-char p)
+      (unless noerror (error "No more patches")))))
+
+(defun git-next-file ()
+  "Move point to the beginning of the next file"
+  (interactive)
+  (let ((p (save-excursion
+             (goto-char (point-at-eol))
+             (and (re-search-forward "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] " nil t)
+                  (match-beginning 0)))))
+    (if p
+      (goto-char p)
+      (error "No more files"))))
+
+(defun git-prev-file ()
+  "Move point to the beginning of the previous file"
+  (interactive)
+  (let ((p (save-excursion
+             (unless (git-file-header-p)
+               (re-search-backward "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] " nil t))
+             (and (re-search-backward "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] " nil t)
+                  (match-beginning 0)))))
+               
+    (if p
+      (goto-char p)
+      (error "No more files"))))
+
+(defun git-expand-hunk ()
+  "Expand the current hunk"
+  (subst-char-in-region (git-hunk-beginning) (git-hunk-end) ?\^M ?\n))
+
+(defun git-collapse-hunk ()
+  "Collapse the current hunk"
+  (subst-char-in-region (git-hunk-beginning) (git-hunk-end) ?\n ?\^M))
+
+(defun git-toggle-hunk-expanded ()
+  "Expand or collapse the current hunk"
+  (interactive)
+  (let ((inhibit-read-only t)
+        (expanded (save-excursion
+                    (goto-char (git-hunk-beginning))
+                    (re-search-forward "\n" (git-hunk-end) t))))
+    (if expanded
+      (git-collapse-hunk)
+      (git-expand-hunk))))
+
+(defun git-on-all-hunks (thunk)
+  "Call THUNK with point on every hunk in the buffer"
+  (save-excursion
+    (goto-char (point-min))
+    (while (git-next-hunk t)
+      (save-excursion
+        (funcall thunk)))))
     
+(defun git-expand-all-hunks ()
+  "Expand all hunks"
+  (interactive)
+  (git-on-all-hunks 'git-expand-hunk))
+
+(defun git-collapse-all-hunks ()
+  "Expand all hunks"
+  (interactive)
+  (git-on-all-hunks 'git-collapse-hunk))
+
+  
+;    (define-key map [?y] 'git-include-hunk)
+;    (define-key map [?x] 'git-exclude-hunk)
+;    (define-key map [?s] 'git-exclude-all-in-current-file)
+;    (define-key map [?f] 'git-include-all-in-current-file)
+;    (define-key map [?Y] 'git-include-all-hunks)
+;    (define-key map [?X] 'git-exclude-all-hunks)
+
+
+
+
 ;;;; ====================================== git process interaction =====================================
 
 (defvar git-hunks-thunk nil
