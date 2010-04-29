@@ -28,6 +28,70 @@
 
 ;;; Code:
 
+;;;; =============================================== Faces ==============================================
+
+(defface git-header
+    '((((class color) (background light))
+       (:background "grey85"))
+      (t (:bold t)))
+  "Common aspects of headers"
+  :group 'git)
+
+(defface git-file-header
+    '((((class color) (background dark))
+       (:foreground "yellow" :bold t))
+      (((class color) (background light))
+       (:foreground "black" :bold t :background "grey70"))
+      (t (:bold t)))
+  "Face used to highlight filename headers"
+  :group 'git)
+
+(defface git-hunk-header
+    '((((class color) (background dark))
+       (:background "gray90" :foreground "black" :inherit git-header))
+      (((class color) (background light))
+       (:background "gray90" :foreground "black" :inherit git-header))
+      (t (:bold t)))
+  "Face used for hunk header lines"
+  :group 'git)
+
+(defface git-line-added
+    '((((class color) (background dark))
+       (:foreground "blue"))
+      (((class color) (background light))
+       (:foreground "blue"))
+      (t (:bold t)))
+  "Face used for lines added"
+  :group 'git)
+
+(defface git-line-removed
+    '((((class color) (background dark))
+       (:foreground "red"))
+      (((class color) (background light))
+       (:foreground "red"))
+      (t (:bold t)))
+  "Face used for lines removed"
+  :group 'git)
+
+(defface git-excluded-header
+    '((((class color) (background dark))
+       (:background "gray90" :strikethru t))
+      (((class color) (background light))
+       (:background "gray90" :strikethru t))
+      (t (:bold t)))
+  "Face used for header lines of excluded patches"
+  :group 'git)
+
+(defface git-context
+    '((((class color)) (:inherit default)))
+  "Face used for context lines in a patch"
+  :group 'git)
+
+(defface git-verbosity
+    '((((class color)) (:inherit shadow)))
+  "Face used for various other fluff in a patch display"
+  :group 'git)
+
 ;;;; ---------------------------- Other customizable settings ----------------------------
 
 (defcustom git-command-prefix [(control x) ?g]
@@ -45,10 +109,8 @@
 (defvar git-responses nil
   "Patch responses for the currently-running interactive darcs process")
 
-;;;; ============================================== Keymaps =============================================
-
 
-;;;; ============================================== keymaps =============================================
+;;;; ============================================== Keymaps =============================================
 
 ;;;; ----------------------------------- global keymap -----------------------------------
 
@@ -85,12 +147,22 @@
     (define-key map [?x] 'git-exclude-hunk)
     (define-key map [?s] 'git-exclude-all-in-current-file)
     (define-key map [?f] 'git-include-all-in-current-file)
-    (define-key map [?a] 'git-expand-all-hunkes)
-    (define-key map [?z] 'git-collapse-all-hunkes)
-    (define-key map [?Y] 'git-include-all-hunkes)
-    (define-key map [?X] 'git-exclude-all-hunkes)
+    (define-key map [?a] 'git-expand-all-hunks)
+    (define-key map [?z] 'git-collapse-all-hunks)
+    (define-key map [?Y] 'git-include-all-hunks)
+    (define-key map [?X] 'git-exclude-all-hunks)
+    (define-key map [?q] 'darcs-quit-current)
     map)
-  "Keymap for displaying lists of atomic hunkes")
+  "Keymap for displaying lists of atomic hunks")
+
+(defvar git-whatsnew-map
+  (let ((map (make-sparse-keymap 'git-whatsnew-map)))
+    (set-keymap-parent map git-hunk-display-map)
+    (define-key map [(control ?c) (control ?c)] 'git-record-from-whatsnew)
+;    (define-key map [(control ?c) (control ?r)] 'git-commit-revert)
+    (define-key map [(control ?x) ?#] 'git-record-from-whatsnew)
+    map)
+  "Keymap for git-whatsnew-mode")
 
 ;;;; ============================================= Commands =============================================
 
@@ -103,14 +175,18 @@
     (if same-window
       (switch-to-buffer (format "*git whatsnew: (%s)" repo-dir))
       (switch-to-buffer-other-window (format "*git whatsnew: (%s)" repo-dir)))
+    (toggle-read-only 1)
     (setq default-directory repo-dir)
-    (erase-buffer)
+    (let ((inhibit-read-only t))
+      (erase-buffer))
     (git-hunks repo-dir '("add" "--patch") nil
                (lambda (raw-output)
-                 (insert raw-output)
-                 (goto-char (point-min))
-                 (save-excursion
-                   (git-markup-hunks))))))
+                 (let ((inhibit-read-only t))
+                   (insert raw-output)
+                   (goto-char (point-min))
+                   (save-excursion
+                     (git-markup-hunks)))
+                 (git-whatsnew-mode)))))
 
 (defun git-markup-hunks ()
   "Starting from point and moving down the rest of the buffer,
@@ -118,7 +194,9 @@
    that we present to the user"
   (let ((lines-left 0)
         (latest-index nil)
-        (latest-permissions nil))
+        (latest-permissions nil)
+        (latest-filename nil)
+        (delcheated nil))
     (flet ((kill-this-line ()
              (delete-region (point-at-bol)
                             (save-excursion (setq lines-left (forward-line 1)) (point)))))    
@@ -129,16 +207,24 @@
           ((looking-at "index \\([0-9a-f.]+\\) \\([0-7]+\\)")
            (setq latest-index (match-string 1))
            (setq latest-permissions (match-string 2))
+           (setq delcheated nil)
            (kill-this-line))
 
-          ((looking-at "--- a/\\([^\r\n]*\\)")
+          ((looking-at "deleted file mode \\([0-7]+\\)")
+           (setq latest-permissions (match-string 1))
+           (setq delcheated t)
+           (kill-this-line))
+
+          ((looking-at "--- \\(?:a/\\([^\r\n]*\\)\\|/dev/null\\)")
            (let ((filename (match-string 1)))
-             (kill-this-line)
-             (save-excursion
-               (insert (format "%s %s (%s)\n" (translate-permissions latest-permissions) filename latest-index)))))
+             (setq latest-filename filename)
+             (kill-this-line)))
 
-          ((looking-at "+++ b/")
-           (kill-this-line))
+          ((looking-at "\\+\\+\\+ \\(?:b/\\([^\r\n]*\\)\\|/dev/null\\)")
+           (let ((filename (match-string 1)))
+             (setq latest-filename (or filename latest-filename))
+             (kill-this-line)
+             (insert "X " (translate-permissions latest-permissions) " " latest-filename (if delcheated " [DELETED]" "") "\n")))
 
           ;; Ensure that hunk headers don't have context lines at the end
           ((looking-at "@@ \\([^@]*\\) @@\\([\r\n]*\\)")
@@ -175,6 +261,24 @@
             (xlat-perms (substring permstring 3 4) 4 "s")
             (xlat-perms (substring permstring 4 5) 2 "s")
             (xlat-perms (substring permstring 5 6) 1 "t"))))
+
+(defvar git-whatsnew-font-lock-keywords
+  '(("^\\(X.*\n\\)"
+     (1 'git-file-header))
+    ("\\(^@@ -\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? \\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\) @@\\).*$"
+     (1 'git-hunk-header))
+    ("^\\([+>].*\n\\)"
+     (1 'git-line-added prepend))
+    ("^\\([-<].*\n\\)"
+     (1 'git-line-removed prepend))
+    ))
+
+(define-derived-mode git-whatsnew-mode fundamental-mode
+  (setq font-lock-defaults '((git-whatsnew-font-lock-keywords))) ; Is this the right way to do this?
+  (setq mode-name "git-whatsnew")
+  (use-local-map git-whatsnew-map)
+  (setq revert-buffer-function (lambda (ignore-auto noconfirm)
+                                 (git-whatsnew t))))
 
     
 ;;;; ====================================== git process interaction =====================================
@@ -222,6 +326,7 @@
     (message "%s: %s" (process-name proc) string))
   (when (and (not (eq 'run (process-status proc)))
              (buffer-live-p (process-buffer proc)))
+    (message "") ; Get rid of the command-line message
     (when git-hunks-thunk
       (funcall git-hunks-thunk (with-current-buffer (process-buffer proc)
                                  (buffer-substring (point-min) (point-max)))))
@@ -282,5 +387,6 @@
 ;;;; ============================================ From xdarcs ===========================================
 ;; kill-current-buffer-process
 ;; one-line-buffer
+;; darcs-quit-current
 
 ;;; jgit.el ends here
