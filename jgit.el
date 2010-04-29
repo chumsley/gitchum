@@ -39,29 +39,154 @@
   :type 'boolean
   :group 'git)
 
-(defvar git-process-scan-pos (point-min)
-  "The point that `git-process-filter' should start scanning from")
+(defvar git-hunks-scan-pos (point-min)
+  "The point that `git-hunks-filter' should start scanning from")
 
 (defvar git-responses nil
   "Patch responses for the currently-running interactive darcs process")
 
+;;;; ============================================== Keymaps =============================================
+
+
+;;;; ============================================== keymaps =============================================
+
+;;;; ----------------------------------- global keymap -----------------------------------
+
+(defvar git-prefix-map
+  (let ((map (make-sparse-keymap)))
+;    (define-key map [?a] 'git-add)
+;    (define-key map [?b] 'git-blame)
+;    (define-key map [?l] 'git-log)
+;    (define-key map [?=] 'git-diff)
+;    (define-key map [??] 'git-describe-bindings)
+;    (define-key map [?d] 'git-describe-patch)
+;    (define-key map [?-] 'git-ediff)
+;    (define-key map [?f] 'git-filelog)
+    (define-key map [?G] 'git-pull)
+    (define-key map [?S] 'git-push)
+;    (define-key map [?i] 'git-init)
+    (define-key map [?m] 'git-query-manifest)
+    (define-key map [?w] 'git-whatsnew)
+;    (define-key map [?x] 'git-remove)
+    map)
+  "The prefix for git commands")
+
+(if (not (keymapp (lookup-key global-map git-command-prefix)))
+  (define-key global-map git-command-prefix git-prefix-map))
+
+(defvar git-hunk-display-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [?\ ] 'git-toggle-hunk-included)
+    (define-key map [?\r] 'git-toggle-hunk-expanded)
+    (define-key map [(control return)] 'git-find-hunk-in-other-window)
+    (define-key map [?j] 'git-next-hunk)
+    (define-key map [?k] 'git-prev-hunk)
+    (define-key map [?y] 'git-include-hunk)
+    (define-key map [?x] 'git-exclude-hunk)
+    (define-key map [?s] 'git-exclude-all-in-current-file)
+    (define-key map [?f] 'git-include-all-in-current-file)
+    (define-key map [?a] 'git-expand-all-hunkes)
+    (define-key map [?z] 'git-collapse-all-hunkes)
+    (define-key map [?Y] 'git-include-all-hunkes)
+    (define-key map [?X] 'git-exclude-all-hunkes)
+    map)
+  "Keymap for displaying lists of atomic hunkes")
+
 ;;;; ============================================= Commands =============================================
 
-(defun git-whatsnew ()
+;;;; ------------------------------------ git-whatsnew -----------------------------------
+
+(defun git-whatsnew (&optional same-window)
   "Prints a list of all the changes in the current repo"
   (interactive)
-  (git-hunks default-directory '("add" "--patch"))
-  (switch-to-buffer "*git output*"))
-  
+  (let ((repo-dir default-directory)) ;TODO `git-repo-dir'
+    (if same-window
+      (switch-to-buffer (format "*git whatsnew: (%s)" repo-dir))
+      (switch-to-buffer-other-window (format "*git whatsnew: (%s)" repo-dir)))
+    (setq default-directory repo-dir)
+    (erase-buffer)
+    (git-hunks repo-dir '("add" "--patch") nil
+               (lambda (raw-output)
+                 (insert raw-output)
+                 (goto-char (point-min))
+                 (save-excursion
+                   (git-markup-hunks))))))
 
+(defun git-markup-hunks ()
+  "Starting from point and moving down the rest of the buffer,
+   convert raw output from `git-hunks' and edit it to the format
+   that we present to the user"
+  (let ((lines-left 0)
+        (latest-index nil)
+        (latest-permissions nil))
+    (flet ((kill-this-line ()
+             (delete-region (point-at-bol)
+                            (save-excursion (setq lines-left (forward-line 1)) (point)))))    
+      (while (zerop lines-left)
+        (setq lines-left nil)
+        (cond
+          ;; Collapse the four lines of file heading into one
+          ((looking-at "index \\([0-9a-f.]+\\) \\([0-7]+\\)")
+           (setq latest-index (match-string 1))
+           (setq latest-permissions (match-string 2))
+           (kill-this-line))
+
+          ((looking-at "--- a/\\([^\r\n]*\\)")
+           (let ((filename (match-string 1)))
+             (kill-this-line)
+             (save-excursion
+               (insert (format "%s %s (%s)\n" (translate-permissions latest-permissions) filename latest-index)))))
+
+          ((looking-at "+++ b/")
+           (kill-this-line))
+
+          ;; Ensure that hunk headers don't have context lines at the end
+          ((looking-at "@@ \\([^@]*\\) @@\\([\r\n]*\\)")
+           (unless (zerop (length (match-string 2)))
+             (save-excursion
+               (goto-char (match-beginning 2))
+               (insert "\n"))))
+          
+          ;; All unrecognized non-blank lines get killed
+          ((or (= (point-at-bol) (point-at-eol))
+               (looking-at "[^ +-@\\]"))
+           (kill-this-line)))
+        (unless lines-left
+          (setq lines-left (forward-line 1)))))))
+
+(defun translate-permissions (permstring)
+  (flet ((xlat-perms (pstr sticky sticky-char)
+           (let* ((p (string-to-number pstr))
+                  (ext (string-to-number (substring permstring 2 3)))
+                  (a (if (zerop (logand p 4)) "-" "r"))
+                  (b (if (zerop (logand p 2)) "-" "w"))
+                  (c (cond
+                       ((zerop (logand ext sticky))
+                        (if (zerop (logand p 1)) "-" "x"))
+                       (t sticky-char))))
+             (concat a b c))))
+    (concat (case (string-to-number (substring permstring 0 2))
+                       (10 "-")
+                       (12 "l")
+                       (otherwise "?"))
+            (xlat-perms (substring permstring 3 4) 4 "s")
+            (xlat-perms (substring permstring 4 5) 2 "s")
+            (xlat-perms (substring permstring 5 6) 1 "t"))))
+
+    
 ;;;; ====================================== git process interaction =====================================
 
-(defun git-hunks (root-dir &optional options responses)
+(defvar git-hunks-thunk nil
+  "Function to execute after `git-hunks'")
+
+(defun git-hunks (root-dir &optional options responses thunk)
   "Run git with OPTIONS, responding to 'hunk'-level prompts as follows:
      1. Hunks are always split if possible
      2. Atomic (unsplittable) hunks are skipped without
         decision unless they are listed in RESPONSES, in
-        which case the specified response is given."
+        which case the specified response is given.
+   When the command has finished executing, THUNK is called with
+   the contents of the output buffer."
   (let ((default-directory root-dir)
         (cmd-line "git")
         (process nil))
@@ -80,21 +205,25 @@
     (with-current-buffer (process-buffer process)
       (erase-buffer)
       (set (make-local-variable 'git-responses) responses)
-      (set (make-local-variable 'git-process-scan-pos) (point-min))
+      (set (make-local-variable 'git-hunks-scan-pos) (point-min))
       (setq default-directory root-dir)
       (make-local-hook 'kill-buffer-hook)
-      (add-hook 'kill-buffer-hook 'kill-current-buffer-process nil t)) ; NOTE `kill-current-buffer-process' is defined in xdarcs
-    (set-process-sentinel process 'git-process-sentinel)
-    (set-process-filter process 'git-hunks-process-filter)))
+      (add-hook 'kill-buffer-hook 'kill-current-buffer-process nil t))
+    (set-process-sentinel process 'git-hunks-sentinel)
+    (set (make-local-variable 'git-hunks-thunk) thunk)
+    (set-process-filter process 'git-hunks-filter)))
 
-(defun git-process-sentinel (proc string)
+(defun git-hunks-sentinel (proc string)
   (when (and (string-match "^exited abnormally" string)
              (process-buffer proc))
     (message "%s: %s" (process-name proc) string))
   (when (and (not (eq 'run (process-status proc)))
-             (buffer-live-p (process-buffer proc))
-             (not git-debug))
-    (kill-buffer (process-buffer proc))))
+             (buffer-live-p (process-buffer proc)))
+    (when git-hunks-thunk
+      (funcall git-hunks-thunk (with-current-buffer (process-buffer proc)
+                                 (buffer-substring (point-min) (point-max)))))
+    (unless git-debug
+      (kill-buffer (process-buffer proc)))))
 
 (defvar git-process-filter-mark-overlay nil
   "An overlay that highlights the currently unconsumed output in the git output buffer")
@@ -104,15 +233,9 @@
    If OPT is non-nil, return non-NIL only if OPT is one of the available commands.
    Side effect: Inserts a newline at the end of the prompt if one is not already present."
   (let ((case-fold-search nil))
-    (when (looking-at "Stage this hunk [^]]*\\]\\?")
-      ;; Force a newline at the end of the prompt to keep our filtering from getting all screwed up
-      (save-excursion
-        (re-search-forward "\\]\\? ")
-        (unless (looking-at "\r?\n")
-          (insert "\n")))
-      (if opt
-        (looking-at (format "Stage this hunk \\[[^]]*\\/%s\\/" opt))
-        t))))
+    (if opt
+      (looking-at (format "Stage this hunk \\[[^]]*\\/%s\\/" opt))
+      (looking-at "Stage this hunk [^]]*\\]\\?"))))
 
 (defun git-hunk-response ()
   "If we have a response for this hunk, then return it, otherwise return NIL"
@@ -123,7 +246,7 @@
       (let ((hunk-filename (match-string 1)))
         (cdr (assoc (format "%s/%s" hunk-filename hunk-id) git-responses))))))
 
-(defun git-hunks-process-filter (proc string)
+(defun git-hunks-filter (proc string)
   (when (buffer-live-p (process-buffer proc))
     (with-current-buffer (process-buffer proc)
       (goto-char (process-mark proc))
@@ -133,12 +256,9 @@
       (goto-char (point-at-bol))
       (while (and (buffer-live-p (process-buffer proc))
                   (< (point) (point-max)))
-        (when git-debug
-          (message (format "Filter: %s" (buffer-substring (point-at-bol) (point-at-eol)))))
         (cond
-
           ;; Splittable hunk
-          ((git-stage-prompt-contains "s")
+          ((git-stage-prompt "s")
            ;; Delete the unsplit hunk
            (let ((e (point-at-eol))
                  (s (re-search-backward "^@@")))
@@ -148,23 +268,16 @@
           
           ;; Atomic hunk that we have a response for
           ((and (git-stage-prompt) (git-hunk-response))
-           (process-send-string proc (format "%s\n" (git-hunk-response)))
-           (delete-region (point-at-bol) (save-excursion (forward-line 1) (point))))
+           (process-send-string proc (format "%s\n" (git-hunk-response))))
           
           ;; Atomic hunk that we have no response for
-          ((git-stage-prompt "j")
-           (process-send-string proc "j\n")
-           (delete-region (point-at-bol) (save-excursion (forward-line 1) (point))))           
-          ((git-stage-prompt "d")
-           (process-send-string proc "d\n")
-           (delete-region (point-at-bol) (save-excursion (forward-line 1) (point))))
-
-          ;; Removable line
-          ((looking-at "Split into ")
-           (delete-region (point-at-bol) (save-excursion (forward-line 1) (point))))
-          )
+          ((git-stage-prompt "n")
+           (process-send-string proc "n\n")))
         (forward-line)))))
 
-
+
+;;;; ============================================ From xdarcs ===========================================
+;; kill-current-buffer-process
+;; one-line-buffer
 
 ;;; jgit.el ends here
