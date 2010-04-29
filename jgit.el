@@ -146,6 +146,9 @@
              (save-excursion
                (goto-char (match-beginning 2))
                (insert "\n"))))
+
+          ;; Some strings pass through safely
+          ((looking-at "No changes."))
           
           ;; All unrecognized non-blank lines get killed
           ((or (= (point-at-bol) (point-at-eol))
