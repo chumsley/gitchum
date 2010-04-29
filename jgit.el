@@ -1,3 +1,10 @@
+;;TODO
+;; 1. Get file headings highlighting properly
+;; 2. whatsnew navigation
+;; 3. collapsing/expanding hunks
+;; 4. selecting/deselecting hunks
+;;
+
 ;;; jgit.el --- xgit-like git integration for emacs
 
 ;; Copyright (C) 2010 James Wright
@@ -39,11 +46,27 @@
 
 (defface git-file-header
     '((((class color) (background dark))
+       (:foreground "yellow"))
+      (((class color) (background light))
+       (:foreground "black" :background "grey70"))
+      (t (:bold t)))
+  "Face used to highlight filename headers"
+  :group 'git)
+
+(defface git-file-header-filename
+    '((((class color) (background dark))
        (:foreground "yellow" :bold t))
       (((class color) (background light))
        (:foreground "black" :bold t :background "grey70"))
       (t (:bold t)))
-  "Face used to highlight filename headers"
+  "Face used to highlight filename portion of filename headers"
+  :group 'git)
+
+(defface git-file-header-deleted
+    '((((class color))
+       (:foreground "red"))
+      (t (:bold t)))
+  "Face used to highlight 'deleted' tag of filename headers"
   :group 'git)
 
 (defface git-hunk-header
@@ -224,7 +247,8 @@
            (let ((filename (match-string 1)))
              (setq latest-filename (or filename latest-filename))
              (kill-this-line)
-             (insert "X " (translate-permissions latest-permissions) " " latest-filename (if delcheated " [DELETED]" "") "\n")))
+             ;; There must be a space after the filename, to make it easier to seperate the filename from the deleted tag
+             (insert (translate-permissions latest-permissions) " " latest-filename " " (if delcheated "[deleted]" "") "\n")))
 
           ;; Ensure that hunk headers don't have context lines at the end
           ((looking-at "@@ \\([^@]*\\) @@\\([\r\n]*\\)")
@@ -263,14 +287,20 @@
             (xlat-perms (substring permstring 5 6) 1 "t"))))
 
 (defvar git-whatsnew-font-lock-keywords
-  '(("^\\(X.*\n\\)"
-     (1 'git-file-header))
+  '(
+    ("^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] \\(.*\\) \\[\\(deleted\\)\\]\n"
+     (0 'git-file-header) (1 'git-file-header-filename prepend) (2 'git-file-header-deleted prepend))
+    ("^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] \\(.*\\) \n"
+     (0 'git-file-header) (1 'git-file-header-filename prepend))
+    
     ("\\(^@@ -\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? \\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\) @@\\).*$"
      (1 'git-hunk-header))
-    ("^\\([+>].*\n\\)"
-     (1 'git-line-added prepend))
-    ("^\\([-<].*\n\\)"
-     (1 'git-line-removed prepend))
+    ("^[+>].*$"
+     (0 'git-line-added))
+    ("^[-<].*$"
+     (0 'git-line-removed))
+    ("^\\\\.*$"
+     (0 'git-verbosity))
     ))
 
 (define-derived-mode git-whatsnew-mode fundamental-mode
