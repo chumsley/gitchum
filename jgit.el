@@ -1,7 +1,6 @@
 ;;TODO
-;; 3. collapsing/expanding hunks
-;; 4. selecting/deselecting hunks
-;;
+;; 1. Staging
+;; 2. Commit
 
 ;;; jgit.el --- xgit-like git integration for emacs
 
@@ -94,13 +93,11 @@
   "Face used for lines removed"
   :group 'git)
 
-(defface git-excluded-header
-    '((((class color) (background dark))
-       (:background "gray90" :strikethru t))
-      (((class color) (background light))
-       (:background "gray90" :strikethru t))
-      (t (:bold t)))
-  "Face used for header lines of excluded patches"
+(defface git-excluded
+    '((((class color))
+       (:inherit 'shadow))
+      (t (:dim t)))
+  "Face used for excluded patches"
   :group 'git)
 
 (defface git-context
@@ -167,13 +164,14 @@
     (define-key map [?J] 'git-next-file)
     (define-key map [?K] 'git-prev-file)
     (define-key map [?y] 'git-include-hunk)
-    (define-key map [?x] 'git-exclude-hunk)
-    (define-key map [?s] 'git-exclude-all-in-current-file)
-    (define-key map [?f] 'git-include-all-in-current-file)
+    (define-key map [?n] 'git-exclude-hunk)
+    (define-key map [?s] 'git-exclude-remaining-in-file)
+    (define-key map [?f] 'git-include-remaining-in-file)
     (define-key map [?a] 'git-expand-all-hunks)
     (define-key map [?z] 'git-collapse-all-hunks)
     (define-key map [?Y] 'git-include-all-hunks)
-    (define-key map [?X] 'git-exclude-all-hunks)
+    (define-key map [?N] 'git-exclude-all-hunks)
+    (define-key map [?d] 'git-exclude-remaining)
     (define-key map [?q] 'darcs-quit-current)
     map)
   "Keymap for displaying lists of atomic hunks")
@@ -181,6 +179,7 @@
 (defvar git-whatsnew-map
   (let ((map (make-sparse-keymap 'git-whatsnew-map)))
     (set-keymap-parent map git-hunk-display-map)
+    (define-key map [(control ?c) (control ?s)] 'git-stage-from-whatsnew)
     (define-key map [(control ?c) (control ?c)] 'git-record-from-whatsnew)
 ;    (define-key map [(control ?c) (control ?r)] 'git-commit-revert)
     (define-key map [(control ?x) ?#] 'git-record-from-whatsnew)
@@ -324,14 +323,33 @@
     (goto-char (point-at-bol))
     (looking-at "^@@")))
 
-(defun git-hunk-beginning ()
+(defun git-file-beginning ()
+  "Returns the position of the beginning of the current file"
+  (if (git-file-header-p)
+    (point-at-bol)
+    (save-excursion
+      (if (re-search-backward "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] ")
+        (point)
+        (error "No current file")))))
+
+(defun git-file-end ()
+  "Returns the position of the end of the current file"
+  (save-excursion
+    (goto-char (git-file-beginning))
+    (while (and (zerop (forward-line 1))
+                (not (git-file-header-p))))
+      (when (= (point) (point-at-bol))
+        (forward-line -1))
+      (point-at-eol)))
+
+(defun git-hunk-beginning (&optional noerror)
   "Returns the position of the beginning of the current hunk"
   (if (git-hunk-header-p)
     (point-at-bol)
     (save-excursion
       (if (re-search-backward "^@@" nil t)
         (point)
-        (error "No current hunk")))))
+        (unless noerror (error "No current hunk"))))))
 
 (defun git-hunk-end ()
   "Returns the position of the end of the current hunk"
@@ -424,20 +442,79 @@
   (git-on-all-hunks 'git-expand-hunk))
 
 (defun git-collapse-all-hunks ()
-  "Expand all hunks"
+  "Collapse all hunks"
   (interactive)
   (git-on-all-hunks 'git-collapse-hunk))
 
-  
-;    (define-key map [?y] 'git-include-hunk)
-;    (define-key map [?x] 'git-exclude-hunk)
-;    (define-key map [?s] 'git-exclude-all-in-current-file)
-;    (define-key map [?f] 'git-include-all-in-current-file)
-;    (define-key map [?Y] 'git-include-all-hunks)
-;    (define-key map [?X] 'git-exclude-all-hunks)
+(defun git-hunk-excluded-p ()
+  "Return exclusion overlay if the current hunk is excluded, or NIL otherwise."
+  (overlay-at (point) 'git-hunk-excluded))
 
+(defun git-exclude-hunk (&optional next-hunk)
+  "Exclude the current hunk. Advances to the next hunk if called interactively or if NEXT-HUNK is non-NIL."
+  (interactive '(t))
+  (unless (git-hunk-excluded-p)
+    (let ((ov (make-overlay (git-hunk-beginning) (git-hunk-end))))
+      (overlay-put ov 'git-hunk-excluded t)
+      (overlay-put ov 'face 'git-excluded)))
+  (git-collapse-hunk)
+  (when next-hunk
+    (git-next-hunk)))
 
+(defun git-include-hunk (&optional next-hunk)
+  "Include the current hunk. Advances to the next hunk if called interactively or if NEXT-HUNK is non-NIL."
+  (interactive '(t))
+  (let ((ov (git-hunk-excluded-p)))
+    (when ov
+      (delete-overlay ov))
+    (git-expand-hunk)
+    (when next-hunk
+      (git-next-hunk))))
 
+(defun git-toggle-hunk-included ()
+  "Include or exclude the current hunk"
+  (interactive)
+  (if (git-hunk-excluded-p)
+    (git-include-hunk)
+    (git-exclude-hunk)))
+
+(defun git-include-all-hunks ()
+  "Include all hunks"
+  (interactive)
+  (git-on-all-hunks 'git-include-hunk))
+
+(defun git-exclude-all-hunks ()
+  "Exclude all hunks"
+  (interactive)
+  (git-on-all-hunks 'git-exclude-hunk))
+
+(defun git-exclude-remaining ()
+  "Exclude current and all following hunks"
+  (interactive)
+  (when (git-hunk-beginning t)
+    (git-exclude-hunk))
+  (while (git-next-hunk t)
+    (git-exclude-hunk)))
+
+(defun git-exclude-remaining-in-file ()
+  "Exclude the current hunk and all following hunks in the same file"
+  (interactive)
+  (let ((e (git-file-end)))
+    (when (git-hunk-beginning t)
+      (git-exclude-hunk))
+    (while (and (git-next-hunk)
+                (< (point) e))
+      (git-exclude-hunk))))
+
+(defun git-include-remaining-in-file ()
+  "Include the current hunk and all following hunks in the same file"
+  (interactive)
+  (let ((e (git-file-end)))
+    (when (git-hunk-beginning t)
+      (git-include-hunk))
+    (while (and (git-next-hunk)
+                (< (point) e))
+      (git-include-hunk))))
 
 ;;;; ====================================== git process interaction =====================================
 
