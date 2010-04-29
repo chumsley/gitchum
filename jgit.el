@@ -222,7 +222,8 @@
         (latest-index nil)
         (latest-permissions nil)
         (latest-filename nil)
-        (delcheated nil))
+        (delcheated nil)
+        (newfile nil))
     (flet ((kill-this-line ()
              (delete-region (point-at-bol)
                             (save-excursion (setq lines-left (forward-line 1)) (point)))))    
@@ -233,7 +234,8 @@
           ((looking-at "index \\([0-9a-f.]+\\) \\([0-7]+\\)")
            (setq latest-index (match-string 1))
            (setq latest-permissions (match-string 2))
-           (setq delcheated nil)
+           (setq delcheated nil
+                 newfile nil)
            (kill-this-line))
 
           ((looking-at "deleted file mode \\([0-7]+\\)")
@@ -250,8 +252,12 @@
            (let ((filename (match-string 1)))
              (setq latest-filename (or filename latest-filename))
              (kill-this-line)
-             ;; There must be a space after the filename, to make it easier to seperate the filename from the deleted tag
-             (insert (translate-permissions latest-permissions) " " latest-filename " " (if delcheated "[deleted]" "") "\n")))
+             (insert (translate-permissions latest-permissions) " "
+                     (cond
+                       (delcheated "deleted:  ")
+                       (newfile    "new file: ")
+                       (t          "modified: "))
+                     latest-filename "\n")))
 
           ;; Ensure that hunk headers don't have context lines at the end
           ((looking-at "@@ \\([^@]*\\) @@\\([\r\n]*\\)")
@@ -289,14 +295,21 @@
             (xlat-perms (substring permstring 4 5) 2 "s")
             (xlat-perms (substring permstring 5 6) 1 "t"))))
 
+(defvar git-file-header-re "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] \\([^:]+\\):?  ?\\(.*\\)\n"
+  "Regular expression for post-formatting file headers.")
+
 (defvar git-whatsnew-font-lock-keywords
-  '(
-    ("^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] \\(.*\\) \\[\\(deleted\\)\\]\n"
-     (0 'git-file-header) (1 'git-file-header-filename prepend) (2 'git-file-header-deleted prepend))
-    ("^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] \\(.*\\) \n"
-     (0 'git-file-header) (1 'git-file-header-filename prepend))
+  `(
+    (,git-file-header-re
+     (0 'git-file-header) (2 'git-file-header-filename prepend)
+     (1
+      (let ((s (match-string 1)))
+        (cond ((string= s "modified") 'git-file-header-mod)
+              ((string= s "deleted") 'git-file-header-del)
+              ((string= s "new file") 'git-file-header-new)))
+      prepend))
     
-    ("\\(^@@ -\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? \\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\) @@\\).*$"
+    ("\\(^@@ -\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? \\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? @@\\).*$"
      (1 'git-hunk-header))
     ("^[+>].*$"
      (0 'git-line-added))
@@ -311,15 +324,16 @@
   (setq font-lock-defaults '((git-whatsnew-font-lock-keywords))) ; Is this the right way to do this?
   (setq mode-name "git-whatsnew")
   (use-local-map git-whatsnew-map)
-  (setq revert-buffer-function (lambda (ignore-auto noconfirm)
-                                 (git-whatsnew t)))
+  (set (make-local-variable 'revert-buffer-function)
+       (lambda (ignore-auto noconfirm)
+         (git-whatsnew t)))
   (setq selective-display t))
 
 (defun git-file-header-p ()
   "Non-nil if point is currently on a file header line"
   (save-excursion
     (goto-char (point-at-bol))
-    (looking-at "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] ")))
+    (looking-at git-file-header-re)))
 
 (defun git-hunk-header-p ()
   "Non-nil if point is currently on a hunk header line"
@@ -332,7 +346,7 @@
   (if (git-file-header-p)
     (point-at-bol)
     (save-excursion
-      (if (re-search-backward "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] ")
+      (if (re-search-backward git-file-header-re)
         (point)
         (error "No current file")))))
 
@@ -397,7 +411,7 @@
   (interactive)
   (let ((p (save-excursion
              (goto-char (point-at-eol))
-             (and (re-search-forward "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] " nil t)
+             (and (re-search-forward git-file-header-re nil t)
                   (match-beginning 0)))))
     (if p
       (goto-char p)
@@ -408,8 +422,8 @@
   (interactive)
   (let ((p (save-excursion
              (unless (git-file-header-p)
-               (re-search-backward "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] " nil t))
-             (and (re-search-backward "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] " nil t)
+               (re-search-backward git-file-header-re nil t))
+             (and (re-search-backward git-file-header-re nil t)
                   (match-beginning 0)))))
                
     (if p
@@ -533,8 +547,8 @@
     (let ((filename nil)
           (responses nil))
       (flet ((update-filename ()
-               (looking-at "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] \\(.*\\) \\(?:\\[deleted\\]\\)?\n")
-               (setq filename (match-string 1)))
+               (looking-at git-file-header-re)
+               (setq filename (match-string 2)))
              (response-key ()
                (looking-at "^@@ [^@]* @@")
                (let ((hunkid (match-string 0)))
@@ -583,6 +597,28 @@
 # Changes to be committed:
 ")
 
+;;;; ------------------------------------- git-status ------------------------------------
+
+(defun git-status (&optional same-window)
+  "Gives the current status of the index and working tree."
+  (interactive)
+  (let ((repo-dir default-directory)) ;TODO `git-repo-dir'
+    (if same-window
+      (switch-to-buffer (format "*git status: (%s)*" repo-dir))
+      (switch-to-buffer-other-window (format "*git status: (%s)*" repo-dir)))
+    (toggle-read-only 1)
+    (setq default-directory repo-dir)
+    (let ((inhibit-read-only t))
+      (erase-buffer))
+
+    ;; Fetch the raw text
+    (call-process "git" nil (current-buffer) nil "status")
+    (goto-char (point-min))))
+
+
+;;;; ------------------------------------- git-commit ------------------------------------
+
+;;TODO
 (defun git-commit (&optional same-window)
   "Commit the currently staged patches."
   (interactive)
