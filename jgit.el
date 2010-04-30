@@ -166,7 +166,7 @@
 (defvar git-hunk-display-map
   (let ((map (make-sparse-keymap)))
     (define-key map [?\r] 'git-toggle-expanded)
-    (define-key map [(control return)] 'git-find-hunk-in-other-window)
+    (define-key map [(control return)] 'git-find-in-other-window)
     (define-key map [?j] 'git-next-hunk)
     (define-key map [?k] 'git-prev-hunk)
     (define-key map [?J] 'git-next-file)
@@ -529,6 +529,27 @@
      (git-collapse-hunk))
     (t (git-expand-hunk))))
 
+(defun git-find-in-other-window ()
+  "Find the current file; If point is at a hunk, go to the appropriate location within the file."
+  (interactive)
+  (let ((filename (git-current-filename))
+        (s (git-hunk-beginning t))
+        (e (point))
+        (target nil))
+    (when s
+      (save-excursion
+        (goto-char s)
+        (looking-at git-hunk-header-re)
+        (setq target (string-to-number (match-string 2)))
+        (while (and (zerop (forward-line 1))
+                    (<= (point-at-eol) e))
+          (unless (looking-at "^-")
+            (setq target (+ target 1))))))
+
+    (find-file-other-window (concat default-directory "/" filename))
+    (when target
+      (goto-line target))))
+
 (defvar *git-current-filename* nil
   "Contains a record describing filename of the current enclosing
   file header.  Provided only for performance reasons; it is not
@@ -805,7 +826,10 @@
       ((unstaged untracked)
        (message "git add %s" filename)
        (message (shell-command-to-string (format "git add %s" filename)))))
-    (revert-buffer t t t)))
+    (revert-buffer t t t)
+    (re-search-forward (format "^[-ld].*: %s" filename) nil t)
+    (goto-char (point-at-bol))))
+  
 
 (defvar git-status-font-lock-keywords
   (append `((,git-chapter-header-re (0 'git-chapter-header)))
