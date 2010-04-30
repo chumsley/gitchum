@@ -168,6 +168,8 @@
     (define-key map [?K] 'git-prev-file)
     (define-key map [?y] 'git-include-hunk)
     (define-key map [?n] 'git-exclude-hunk)
+    (define-key map [?r] 'git-refine-hunk)
+    (define-key map [?R] 'git-refine-all-hunks)
     (define-key map [?s] 'git-exclude-remaining-in-file)
     (define-key map [?f] 'git-include-remaining-in-file)
     (define-key map [?a] 'git-expand-all-hunks)
@@ -204,7 +206,7 @@
     (setq default-directory repo-dir)
     (let ((inhibit-read-only t))
       (erase-buffer))
-    (git-hunks repo-dir '("add" "--patch") nil
+    (git-hunks repo-dir '("add" "--patch") git-refined-hunks
                (lambda (raw-output)
                  (let ((inhibit-read-only t))
                    (insert raw-output)
@@ -325,16 +327,19 @@
      (0 'git-verbosity))
     ))
 
-(define-derived-mode git-whatsnew-mode fundamental-mode
-  (kill-all-local-variables)
+(defun git-whatsnew-mode ()
+  (unless (eq major-mode 'git-whatsnew)
+    ;; Don't kill locals if we're already in whatsnew-mode
+    (kill-all-local-variables))
   (setq font-lock-defaults '((git-whatsnew-font-lock-keywords) t))
-        
+  (setq major-mode 'git-whatsnew)
   (setq mode-name "git-whatsnew")
   (use-local-map git-whatsnew-map)
   (set (make-local-variable 'revert-buffer-function)
        (lambda (ignore-auto noconfirm)
          (git-whatsnew t)))
-  (setq selective-display t))
+  (setq selective-display t)
+  (font-lock-fontify-buffer))
 
 (defun git-file-header-p ()
   "Non-nil if point is currently on a file header line"
@@ -478,6 +483,20 @@
 (defvar git-refined-hunks nil
   "Assoc list of hunk plists for hunks that need to be refined")
 
+(defun git-refine-hunk ()
+  "Split the current hunk, if possible"
+  (interactive)
+  (let ((plist (git-hunk-plist)))
+    (make-local-variable 'git-refined-hunks)
+    (push (cons (plist-get plist :key) (plist-put plist :response "s"))
+          git-refined-hunks)
+    (revert-buffer t t t)))
+
+(defun git-refine-all-hunks ()
+  "Split all splittable hunks"
+  (interactive)
+  (git-on-all-hunks 'git-refine-hunk))
+
 (defun git-current-filename ()
   "Returns the name of the file enclosing point."
   (or *git-current-filename*
@@ -604,8 +623,8 @@
       (let ((plist (git-hunk-plist)))
         (push (cons (plist-get plist :key) plist)
               state-assoc))))
-   (append git-refined-hunks
-           (nreverse state-assoc))))
+   (append (nreverse state-assoc)
+           git-refined-hunks)))
 
 (defun git-stage-from-whatsnew ()
   "Stage the patches that are included in the current whatsnew buffer"
