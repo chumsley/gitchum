@@ -346,7 +346,7 @@
   "Non-nil if point is currently on a hunk header line"
   (save-excursion
     (goto-char (point-at-bol))
-    (looking-at "^@@")))
+    (looking-at git-hunk-header-re)))
 
 (defun git-file-beginning ()
   "Returns the position of the beginning of the current file"
@@ -401,6 +401,16 @@
       (goto-char p)
       (unless noerror (error "No more patches")))))
 
+(defun git-next-file-or-hunk (&optional noerror)
+  "Move point to the beginning of the next hunk or file header"
+  (let ((p (save-excursion
+             (goto-char (point-at-eol))
+             (and (re-search-forward (format "^@@\\|%s" git-file-header-re) nil t)
+                  (match-beginning 0)))))
+    (if p
+      (goto-char p)
+      (unless noerror (error "No more patches")))))
+
 (defun git-prev-hunk (&optional noerror)
   "Move point to the beginning of the previous hunk"
   (interactive)
@@ -447,23 +457,63 @@
   (let ((inhibit-read-only t))
     (subst-char-in-region (git-hunk-beginning) (git-hunk-end) ?\n ?\^M)))
 
+(defun git-hunk-expanded-p ()
+  "Return non-NIL if the current hunk is expanded"
+  (save-excursion
+    (goto-char (git-hunk-beginning))
+    (re-search-forward "\n" (git-hunk-end) t)))
+
 (defun git-toggle-hunk-expanded ()
   "Expand or collapse the current hunk"
   (interactive)
-  (let ((expanded (save-excursion
-                    (goto-char (git-hunk-beginning))
-                    (re-search-forward "\n" (git-hunk-end) t))))
-    (if expanded
+  (if (git-hunk-expanded-p)
       (git-collapse-hunk)
-      (git-expand-hunk))))
+      (git-expand-hunk)))
+
+(defvar *git-current-filename* nil
+  "Contains a record describing filename of the current enclosing
+  file header.  Provided only for performance reasons; it is not
+  guaranteed to be set.")
+
+(defvar git-refined-hunks nil
+  "Assoc list of hunk plists for hunks that need to be refined")
+
+(defun git-current-filename ()
+  "Returns the name of the file enclosing point."
+  (or *git-current-filename*
+      (let ((fpos (git-file-beginning)))
+        (save-excursion
+          (goto-char fpos)
+          (looking-at git-file-header-re)
+          (match-string 2)))))
 
 (defun git-on-all-hunks (thunk)
-  "Call THUNK with point on every hunk in the buffer"
-  (save-excursion
-    (goto-char (point-min))
-    (while (git-next-hunk t)
-      (save-excursion
-        (funcall thunk)))))
+  "Call THUNK with point on every hunk in the buffer."
+  (let ((*git-current-filename* nil))
+    (save-excursion
+      (goto-char (point-min))
+      (when (git-file-header-p)
+        (setq *git-current-filename* (match-string 2)))
+      (while (git-next-file-or-hunk t)
+        (if (git-file-header-p)
+          (setq *git-current-filename* (match-string 2))
+          (save-excursion
+            (funcall thunk)))))))
+
+(defun git-hunk-plist ()
+  "Returns a plist describing the current hunk"
+  (let ((filename (git-current-filename))
+        (hunkid (save-excursion
+                  (goto-char (git-hunk-beginning))
+                  (looking-at "^@@ [^@]* @@")
+                  (match-string 0)))
+        (excluded-p (git-hunk-excluded-p)))
+    (list :filename filename
+          :hunkid hunkid
+          :key (format "%s/%s" filename hunkid)
+          :expanded-p (git-hunk-expanded-p)
+          :excluded-p excluded-p
+          :response (if excluded-p "n" "y"))))
     
 (defun git-expand-all-hunks ()
   "Expand all hunks"
@@ -545,38 +595,23 @@
                 (< (point) e))
       (git-include-hunk))))
 
-(defun git-collect-responses ()
-  "Collect responses from the current buffer."
-  (save-excursion
-    (goto-char (point-min))
-    (unless (git-file-header-p)
-      (git-next-file))
-    (let ((filename nil)
-          (responses nil))
-      (flet ((update-filename ()
-               (looking-at git-file-header-re)
-               (setq filename (match-string 2)))
-             (response-key ()
-               (looking-at "^@@ [^@]* @@")
-               (let ((hunkid (match-string 0)))
-                 (format "%s/%s" filename hunkid))))
-        (update-filename)
-        (while (zerop (forward-line 1))
-          (cond
-            ((git-file-header-p)
-             (update-filename))
-            ((git-hunk-header-p)
-             (setq responses (cons (cons (response-key)
-                                         (if (git-hunk-excluded-p)
-                                           "n" "y"))
-                                   responses)))))
-        (nreverse responses)))))
+(defun git-collect-hunk-plists ()
+  "Collect state plists from each hunk in the current buffer, and
+  return an assoc list from hunk key to the associated state plist."
+ (let ((state-assoc nil))
+   (git-on-all-hunks
+    (lambda ()
+      (let ((plist (git-hunk-plist)))
+        (push (cons (plist-get plist :key) plist)
+              state-assoc))))
+   (append git-refined-hunks
+           (nreverse state-assoc))))
 
 (defun git-stage-from-whatsnew ()
   "Stage the patches that are included in the current whatsnew buffer"
   (interactive)
-  (let ((responses (git-collect-responses)))
-    (git-hunks default-directory '("add" "--patch") responses
+  (let ((plist-assoc (git-collect-hunk-plists)))
+    (git-hunks default-directory '("add" "--patch") plist-assoc
                (lambda (str)
                  (git-whatsnew t)
                  (message "Changes staged")))))
@@ -584,8 +619,8 @@
 (defun git-commit-from-whatsnew ()
   "Stage the included patches and then commit"
   (interactive)
-  (let ((responses (git-collect-responses)))
-    (git-hunks default-directory '("add" "--patch") responses
+  (let ((plist-assoc (git-collect-hunk-plists)))
+    (git-hunks default-directory '("add" "--patch") plist-assoc
                (lambda (str)
                  (darcs-quit-current)
                  (git-commit)))))
@@ -655,11 +690,8 @@
   "Function to execute after `git-hunks'")
 
 (defun git-hunks (root-dir &optional options responses thunk)
-  "Run git with OPTIONS, responding to 'hunk'-level prompts as follows:
-     1. Hunks are always split if possible
-     2. Atomic (unsplittable) hunks are skipped without
-        decision unless they are listed in RESPONSES, in
-        which case the specified response is given.
+  "Run git with OPTIONS, responding to 'hunk'-level prompts based on RESPONSES.
+   If a hunk is not listed in RESPONSES, it will be skipped.
    When the command has finished executing, THUNK is called with
    the contents of the output buffer."
   (let ((default-directory root-dir)
@@ -673,20 +705,20 @@
     (when (and (get-buffer "*git output*")
                (get-buffer-process "*git output*")
                (eq 'run (process-status (get-buffer-process "*git output*")))
-               (yes-or-no-p "A git process is already running; kill it?"))
-      (kill-process (get-buffer-process "*git output*"))
-      (kill-buffer "*git output*"))
-    (setq process (apply 'start-process cmd-line "*git output*" "git" options))
-    (with-current-buffer (process-buffer process)
-      (erase-buffer)
-      (set (make-local-variable 'git-responses) responses)
-      (set (make-local-variable 'git-hunks-scan-pos) (point-min))
-      (setq default-directory root-dir)
-      (make-local-hook 'kill-buffer-hook)
-      (add-hook 'kill-buffer-hook 'kill-current-buffer-process nil t))
-    (set-process-sentinel process 'git-hunks-sentinel)
-    (set (make-local-variable 'git-hunks-thunk) thunk)
-    (set-process-filter process 'git-hunks-filter)))
+               (yes-or-no-p "A git process is already running; kill it? ")) ;
+  (kill-process (get-buffer-process "*git output*"))
+  (kill-buffer "*git output*"))
+               (setq process (apply 'start-process cmd-line "*git output*" "git" options))
+               (with-current-buffer (process-buffer process)
+                 (erase-buffer)
+                 (set (make-local-variable 'git-responses) responses)
+                 (set (make-local-variable 'git-hunks-scan-pos) (point-min))
+                 (setq default-directory root-dir)
+                 (make-local-hook 'kill-buffer-hook)
+                 (add-hook 'kill-buffer-hook 'kill-current-buffer-process nil t))
+               (set-process-sentinel process 'git-hunks-sentinel)
+               (set (make-local-variable 'git-hunks-thunk) thunk)
+               (set-process-filter process 'git-hunks-filter)))
 
 (defun git-hunks-sentinel (proc string)
   (flet ((bufstr ()
@@ -718,8 +750,10 @@
     (re-search-backward "^@@ [^@]* @@")
     (let ((hunk-id (match-string 0)))
       (re-search-backward "^--- a/\\([^\r\n]*\\)$")
-      (let ((hunk-filename (match-string 1)))
-        (cdr (assoc (format "%s/%s" hunk-filename hunk-id) git-responses))))))
+      (let* ((hunk-filename (match-string 1))
+             (hunk-key (format "%s/%s" hunk-filename hunk-id))
+             (hunk-plist (cdr (assoc hunk-key git-responses))))
+        (plist-get hunk-plist :response)))))
 
 (defun git-hunks-filter (proc string)
   (when (buffer-live-p (process-buffer proc))
@@ -733,7 +767,8 @@
                   (< (point) (point-max)))
         (cond
           ;; Splittable hunk
-          ((git-stage-prompt "s")
+          ((and (git-stage-prompt "s")
+                (string= (git-hunk-response) "s"))
            ;; Delete the unsplit hunk
            (let ((e (point-at-eol))
                  (s (re-search-backward "^@@")))
@@ -741,11 +776,11 @@
            ;; Indicate that we want to split the hunk
            (process-send-string proc "s\n"))
           
-          ;; Atomic hunk that we have a response for
+          ;; Other hunk that we have a response for
           ((and (git-stage-prompt) (git-hunk-response))
            (process-send-string proc (format "%s\n" (git-hunk-response))))
           
-          ;; Atomic hunk that we have no response for
+          ;; Hunk that we have no response for
           ((git-stage-prompt "n")
            (process-send-string proc "n\n")))
         (forward-line)))))
