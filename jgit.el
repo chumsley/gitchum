@@ -129,6 +129,18 @@
   "Face used for various other fluff in a patch display"
   :group 'git)
 
+(defface git-branch
+    '((t (:bold t)))
+  "Face used to highlight the branch name"
+  :group 'git)
+
+(defface git-commit-msg
+    '((t (:inherit default)))
+  "Face used for the commit message"
+  :group 'git)
+
+
+
 ;;;; ---------------------------- Other customizable settings ----------------------------
 
 (defcustom git-command-prefix [(control x) ?g]
@@ -156,6 +168,7 @@
     (define-key map [?m] 'git-query-manifest)
     (define-key map [?s] 'git-status)
     (define-key map [?w] 'git-whatsnew)
+    (define-key map [?c] 'git-commit)
 ;    (define-key map [?x] 'git-remove)
     map)
   "The prefix for git commands")
@@ -208,9 +221,7 @@
       (switch-to-buffer (format "*git %s: (%s)*" name repo-dir))
       (switch-to-buffer-other-window (format "*git %s: (%s)*" name repo-dir)))
     (toggle-read-only 1)
-    (setq default-directory repo-dir)
-    (let ((inhibit-read-only t))
-      (erase-buffer))))
+    (setq default-directory repo-dir)))
 
 ;;;; ------------------------------------ git-whatsnew -----------------------------------
 
@@ -220,13 +231,17 @@
   (git-command-window 'whatsnew same-window)
   (git-hunks '("add" "--patch") git-refined-hunks
              (lambda (raw-output)
-               (let ((inhibit-read-only t))
-                 (insert raw-output)
-                 (goto-char (point-min))
+               (let ((inhibit-read-only t)
+                     (cooked (with-temp-buffer
+                               (insert raw-output)
+                               (goto-char (point-min))
+                               (git-markup-hunks)
+                               (buffer-substring (point-min) (point-max)))))
+                 (erase-buffer)
+                 (git-whatsnew-mode)
                  (save-excursion
-                   (git-markup-hunks)))
-               (git-whatsnew-mode)
-               (message nil))))
+                   (insert cooked))
+                 (message nil)))))
 
 (defun git-markup-hunks ()
   "Starting from point and moving down the rest of the buffer,
@@ -721,20 +736,6 @@
                  (darcs-quit-current)
                  (git-commit)))))
 
-(defvar git-commit-buffer-instructions "
-# Please enter the commit message for your changes.
-# (Comment lines starting with '#' will not be included)
-# On branch %s
-#\\<git-commit-map>
-# Type \\[git-commit-execute] to commit the staged changes.
-# Type \\[kill-buffer] to abandon this commit buffer.
-#
-# The current index status is listed below; you may stage or unstage
-# changes before committing.
-#
-# Changes to be committed:
-")
-
 ;;;; --------------------------------- git-query-manifest --------------------------------
 
 (defun git-query-manifest (&optional same-window)
@@ -792,15 +793,24 @@
   "Gives the current status of the index and working tree."
   (interactive)
   (git-command-window 'status same-window)
-  (let ((inhibit-read-only t))
-    ;; Fetch the raw text
-    (call-process "git" nil (current-buffer) nil "status")
-    (goto-char (point-min))
-    (git-markup-status)
-    (git-status-mode)
-    (git-on-all-hunks 'git-collapse-file)
-    (goto-char (point-min))))
+  (git-status-mode)
+  (git-status-internal))
 
+(defun git-status-internal ()
+  (let ((inhibit-read-only t)
+        (cooked-text
+         ;; Do all our editing inside a temp buffer to prevent screen flicker.  We copy everything
+         ;; back to tbe real buffer when we're ready to show the results.
+         (with-temp-buffer
+           (call-process "git" nil (current-buffer) nil "status")
+           (goto-char (point-min))
+           (git-markup-status)
+           (git-on-all-hunks 'git-collapse-file)
+           (buffer-substring (point-min) (point-max)))))
+    (erase-buffer)
+    (insert cooked-text)
+    (goto-char (point-min))))
+  
 (defun git-current-chapter ()
   "Returns one of '(staged unstaged untracked) representing the current chapter for point."
   (save-excursion
@@ -833,13 +843,16 @@
   
 
 (defvar git-status-font-lock-keywords
-  (append `((,git-chapter-header-re (0 'git-chapter-header)))
+  (append `((,git-chapter-header-re (0 'git-chapter-header))
+            ("^# On branch \\(.*\\)" (0 'font-lock-comment-face) (1 'git-branch prepend)))
           git-whatsnew-font-lock-keywords))
 
 (defvar git-status-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map git-hunk-display-map)
     (define-key map [?\ ] 'git-toggle-file-staged)
+    (define-key map [?n] 'git-next-file)
+    (define-key map [?p] 'git-prev-file)
     map))
 
 (defun git-status-mode ()
@@ -869,8 +882,7 @@
         (cond
           ;; Look for the branch-description line
           ((looking-at "# On branch \\(.*\\)")
-           (setq branch (match-string 1))
-           (kill-this-line))
+           (setq branch (match-string 1)))
 
           ;; Watch for changes in chapter
           ((looking-at "# Changes to be committed:")
@@ -923,27 +935,74 @@
           
           ;; Kill anything we don't recognize
           (t
-
            (kill-this-line)))
         (unless lines-left
           (setq lines-left (forward-line 1)))))))
-               
-
-           
 
 ;;;; ------------------------------------- git-commit ------------------------------------
 
-;;TODO
-(defun git-commit (&optional same-window)
+(defvar git-commit-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [(control ?c) (control ?c)] 'git-commit-execute)
+    (define-key map [(control ?c) ?n] 'git-next-file)
+    map)
+  "Only thing that's different about the commit map is that is has a `C-c C-c' binding")
+  
+(defvar git-commit-buffer-instructions
+  "# Please enter the commit message for your changes.
+# (Comment lines starting with '#' will not be included)
+#\\<git-commit-map>
+# Type \\[git-commit-execute] to commit the staged changes.
+# Type \\[kill-buffer] to abandon this commit buffer.
+#
+# The current status is listed below; you may stage or unstage
+# changes before committing.
+#
+")
+
+(defun git-commit-mode ()
+  (unless (eq major-mode 'git-commit)
+    (kill-all-local-variables))
+  (setq font-lock-defaults '((git-status-font-lock-keywords) t))
+  (setq major-mode 'git-commit)
+  (setq mode-name "git-commit")
+  (use-local-map git-commit-map)
+  (set (make-local-variable 'revert-buffer-function)
+       (lambda (ignore-auto noconfirm)
+         (git-commit t (darcs-trim-newlines
+                        (buffer-substring (overlay-start git-commit-msg-overlay) (overlay-end git-commit-msg-overlay))))))
+  (setq selective-display t)
+  (font-lock-fontify-buffer))
+
+(defvar git-commit-msg-overlay nil)
+
+(defun git-commit (&optional same-window msg)
   "Commit the currently staged patches."
   (interactive)
   (git-command-window 'commit same-window)
-  (insert (format (substitute-command-keys git-commit-buffer-instructions)
-                  (git-current-branch)))
-  (git-hunks '("diff" "--cached") nil
-             (lambda (str)
-               (save-excursion (insert str))
-               (git-markup-hunks))))
+  (git-commit-mode)
+  (toggle-read-only 0)
+  (let ((inhibit-read-only t))
+    (git-status-internal)
+    (insert (substitute-command-keys git-commit-buffer-instructions))
+    (goto-char (point-min))
+    (insert "\n\n\n")
+    (put-text-property (point) (point-max) 'read-only t)
+    (put-text-property (point) (point-max) 'keymap git-status-map)
+    (unless git-commit-msg-overlay
+      (set (make-local-variable 'git-commit-msg-overlay)
+           (make-overlay (point-min) (point) nil nil t)))
+    (move-overlay git-commit-msg-overlay (point-min) (point))
+    (overlay-put git-commit-msg-overlay 'face 'git-commit-msg))
+  (goto-char (point-min))
+  (when msg
+    (insert msg)
+    (goto-char (point-min))))
+  
+(defun git-commit-execute ()
+  "Commit the currently-staged changes using a message from the current commit buffer!"
+  (error "TK"))
+  
 
 ;;;; ====================================== git process interaction =====================================
 
