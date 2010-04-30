@@ -193,28 +193,34 @@
 
 ;;;; ============================================= Commands =============================================
 
+(defun git-command-window (name same-window)
+  "Switch to a readonly git command window with the
+  default-directory set to the repo root.  Contents are erased,
+  but local variables might be leftover from previous instances."
+  (let ((repo-dir default-directory)) ;TODO `git-repo-dir'
+    (if same-window
+      (switch-to-buffer (format "*git %s: (%s)*" name repo-dir))
+      (switch-to-buffer-other-window (format "*git %s: (%s)*" name repo-dir)))
+    (toggle-read-only 1)
+    (setq default-directory repo-dir)
+    (let ((inhibit-read-only t))
+      (erase-buffer))))
+
 ;;;; ------------------------------------ git-whatsnew -----------------------------------
 
 (defun git-whatsnew (&optional same-window)
   "Prints a list of all the changes in the current repo"
   (interactive)
-  (let ((repo-dir default-directory)) ;TODO `git-repo-dir'
-    (if same-window
-      (switch-to-buffer (format "*git whatsnew: (%s)*" repo-dir))
-      (switch-to-buffer-other-window (format "*git whatsnew: (%s)*" repo-dir)))
-    (toggle-read-only 1)
-    (setq default-directory repo-dir)
-    (let ((inhibit-read-only t))
-      (erase-buffer))
-    (git-hunks repo-dir '("add" "--patch") git-refined-hunks
-               (lambda (raw-output)
-                 (let ((inhibit-read-only t))
-                   (insert raw-output)
-                   (goto-char (point-min))
-                   (save-excursion
-                     (git-markup-hunks)))
-                 (git-whatsnew-mode)
-                 (message nil)))))
+  (git-command-window 'whatsnew same-window)
+  (git-hunks '("add" "--patch") git-refined-hunks
+             (lambda (raw-output)
+               (let ((inhibit-read-only t))
+                 (insert raw-output)
+                 (goto-char (point-min))
+                 (save-excursion
+                   (git-markup-hunks)))
+               (git-whatsnew-mode)
+               (message nil))))
 
 (defun git-markup-hunks ()
   "Starting from point and moving down the rest of the buffer,
@@ -630,7 +636,7 @@
   "Stage the patches that are included in the current whatsnew buffer"
   (interactive)
   (let ((plist-assoc (git-collect-hunk-plists)))
-    (git-hunks default-directory '("add" "--patch") plist-assoc
+    (git-hunks '("add" "--patch") plist-assoc
                (lambda (str)
                  (git-whatsnew t)
                  (message "Changes staged")))))
@@ -639,7 +645,7 @@
   "Stage the included patches and then commit"
   (interactive)
   (let ((plist-assoc (git-collect-hunk-plists)))
-    (git-hunks default-directory '("add" "--patch") plist-assoc
+    (git-hunks '("add" "--patch") plist-assoc
                (lambda (str)
                  (darcs-quit-current)
                  (git-commit)))))
@@ -657,6 +663,56 @@
 #
 # Changes to be committed:
 ")
+
+;;;; --------------------------------- git-query-manifest --------------------------------
+
+(defun git-query-manifest (&optional same-window)
+  "Shows the current state of the repository, according to the index."
+  (interactive)
+  (git-command-window 'manifest same-window)
+  (let ((inhibit-read-only t)
+        (lines-left 0))
+    (call-process "git" nil (current-buffer) nil "ls-files" "--stage" "--full-name")
+    (goto-char (point-min))
+    (save-excursion
+      (while (zerop lines-left)
+        (when (looking-at "\\(.*\\) .*\t.*$")
+          (insert (translate-permissions (match-string 1)))
+          (delete-word)
+          (goto-char (point-at-bol)))
+        (setq lines-left (forward-line 1)))))
+  (git-manifest-mode))
+
+(defvar git-manifest-font-lock-keywords
+  '((".*\t\\(.*\\)$" (1 'git-file-header-filename))))
+
+(defvar git-manifest-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [?\r] 'git-goto-manifest-file)
+    (define-key map [?q] 'darcs-quit-current)
+    map))
+
+(defun git-manifest-mode ()
+  (kill-all-local-variables)
+  (setq font-lock-defaults '((git-manifest-font-lock-keywords) t))
+  (setq major-mode 'git-manifest)
+  (setq mode-name "git-manifest")
+  (use-local-map git-manifest-map)
+  (set (make-local-variable 'revert-buffer-function)
+       (lambda (ignore-auto noconfirm)
+         (git-query-manifest t)))
+  (font-lock-fontify-buffer))
+
+(defun git-goto-manifest-file ()
+  "Go to the file listed on the current line"
+  (interactive)
+  (save-excursion
+    (goto-char (point-at-bol))
+    (looking-at ".*\t\\(.*\\)$")
+    (let ((filename (match-string 1)))
+      (if filename
+        (find-file-other-window (concat default-directory "/" filename))
+        (error "No filename at point")))))
 
 ;;;; ------------------------------------- git-status ------------------------------------
 
@@ -708,12 +764,12 @@
 (defvar git-hunks-thunk nil
   "Function to execute after `git-hunks'")
 
-(defun git-hunks (root-dir &optional options responses thunk)
+(defun git-hunks (options responses thunk)
   "Run git with OPTIONS, responding to 'hunk'-level prompts based on RESPONSES.
    If a hunk is not listed in RESPONSES, it will be skipped.
    When the command has finished executing, THUNK is called with
    the contents of the output buffer."
-  (let ((default-directory root-dir)
+  (let ((root-dir default-directory)
         (cmd-line "git")
         (process nil))
     (setq options (remove nil options))
