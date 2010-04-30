@@ -300,6 +300,9 @@
 (defvar git-file-header-re "^[ld-][r-][w-][xs-][r-][w-][xs-][r-][w-][xt-] \\([^:]+\\):?  ?\\(.*\\)\n"
   "Regular expression for post-formatting file headers.")
 
+(defvar git-hunk-header-re "\\(^@@ -\\(?:[0-9]+\\)\\(?:,\\(?:[0-9]+\\)\\)? \\+\\([0-9]+\\)\\(?:,\\(?:[0-9]+\\)\\)? @@\\).*$"
+  "Regular expression for hunk headers.")
+
 (defvar git-whatsnew-font-lock-keywords
   `(
     (,git-file-header-re
@@ -311,19 +314,21 @@
               ((string= s "new file") 'git-file-header-new)))
       prepend))
     
-    ("\\(^@@ -\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? \\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? @@\\).*$"
-     (1 'git-hunk-header))
+    (,git-hunk-header-re (1 'git-hunk-header))
     ("^[+>].*$"
      (0 'git-line-added))
     ("^[-<].*$"
      (0 'git-line-removed))
+    ("^#.*$"
+     (0 'font-lock-comment-face))
     ("^\\\\.*$"
      (0 'git-verbosity))
     ))
 
 (define-derived-mode git-whatsnew-mode fundamental-mode
   (kill-all-local-variables)
-  (setq font-lock-defaults '((git-whatsnew-font-lock-keywords))) ; Is this the right way to do this?
+  (setq font-lock-defaults '((git-whatsnew-font-lock-keywords) t))
+        
   (setq mode-name "git-whatsnew")
   (use-local-map git-whatsnew-map)
   (set (make-local-variable 'revert-buffer-function)
