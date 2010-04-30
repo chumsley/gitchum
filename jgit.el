@@ -743,6 +743,7 @@
   (git-command-window 'manifest same-window)
   (let ((inhibit-read-only t)
         (lines-left 0))
+    (erase-buffer)
     (call-process "git" nil (current-buffer) nil "ls-files" "--stage" "--full-name")
     (goto-char (point-min))
     (save-excursion
