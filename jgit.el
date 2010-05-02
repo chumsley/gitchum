@@ -195,7 +195,7 @@
     (set-keymap-parent map git-hunk-display-map)
     (define-key map [(control ?c) (control ?s)] 'git-stage-from-whatsnew)
     (define-key map [(control ?c) (control ?c)] 'git-commit-from-whatsnew)
-;    (define-key map [(control ?c) (control ?r)] 'git-revert)
+    (define-key map [(control ?c) (control ?r)] 'git-revert)
     (define-key map [(control ?x) ?#] 'git-commit-from-whatsnew)
     (define-key map [?r] 'git-refine-hunk)
     (define-key map [?R] 'git-refine-all-hunks)
@@ -1045,6 +1045,18 @@
    (buffer-substring (overlay-start git-commit-msg-overlay)
                      (overlay-end git-commit-msg-overlay))))
 
+(defun git-revert ()
+  "Revert the selected hunks"
+  (interactive)
+  (when (yes-or-no-p "Do you really want to revert these changes? ")
+    (let ((plist-assoc (git-collect-hunk-plists)))
+      (git-hunks '("stash" "save" "--patch") plist-assoc
+                 (lambda (str)
+                   (git-sync-command nil "stash" "drop")
+                   (git-whatsnew t)
+                   (message "Changes reverted"))))))
+
+
 ;;;; ---------------------------- simple pass-through commands ---------------------------
 
 (defun git-push ()
@@ -1133,14 +1145,14 @@
           (funcall git-hunks-thunk (bufstr))
           (message nil))))))
 
-(defun git-stage-prompt (&optional opt)
-  "Return non-nil if point is looking at a staging prompt.
+(defun git-hunk-prompt (&optional opt)
+  "Return non-nil if point is looking at a hunk prompt.
    If OPT is non-nil, return non-NIL only if OPT is one of the available commands.
    Side effect: Inserts a newline at the end of the prompt if one is not already present."
   (let ((case-fold-search nil))
     (if opt
-      (looking-at (format "Stage this hunk [^]]*%s[^]]*\\]\\?" opt))
-      (looking-at "Stage this hunk [^]]*\\]\\?"))))
+      (looking-at (format "\\(?:Stage\\|Stash\\) this hunk [^]]*%s[^]]*\\]\\?" opt))
+      (looking-at "\\(?:Stage\\|Stash\\) this hunk [^]]*\\]\\?"))))
 
 (defun git-hunk-response ()
   "If we have a response for this hunk, then return it, otherwise return NIL"
@@ -1165,7 +1177,7 @@
                   (< (point) (point-max)))
         (cond
           ;; Splittable hunk
-          ((and (git-stage-prompt "s")
+          ((and (git-hunk-prompt "s")
                 (string= (git-hunk-response) "s"))
            ;; Delete the unsplit hunk
            (let ((e (point-at-eol))
@@ -1175,14 +1187,14 @@
            (process-send-string proc "s\n"))
           
           ;; Other hunk that we have a response for
-          ((and (git-stage-prompt) (git-hunk-response))
+          ((and (git-hunk-prompt) (git-hunk-response))
            (let ((cmd (format "%s\n" (git-hunk-response))))
              (save-excursion (goto-char (point-at-eol))
                              (insert cmd))
              (process-send-string proc cmd)))
           
           ;; Hunk that we have no response for
-          ((git-stage-prompt "n")
+          ((git-hunk-prompt "n")
            (save-excursion (goto-char (point-at-eol))
                            (insert "n [default]\n"))
            (process-send-string proc "n\n")))
