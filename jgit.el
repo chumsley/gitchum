@@ -976,8 +976,7 @@
   (use-local-map git-commit-map)
   (set (make-local-variable 'revert-buffer-function)
        (lambda (ignore-auto noconfirm)
-         (git-commit t (darcs-trim-newlines
-                        (buffer-substring (overlay-start git-commit-msg-overlay) (overlay-end git-commit-msg-overlay))))))
+         (git-commit t (git-commit-message))))
   (setq selective-display t)
   (font-lock-fontify-buffer))
 
@@ -1008,8 +1007,16 @@
   
 (defun git-commit-execute ()
   "Commit the currently-staged changes using a message from the current commit buffer!"
-  (error "TK"))
+  (with-temp-buffer
+    (call-process "git" nil (list (current-buffer) t) nil "commit" "-m" (git-commit-message))
+    (message (buffer-substring (point-min) (point-max)))))
+
   
+(defun git-commit-message ()
+  "Return the commit message from the current buffer"
+  (darcs-trim-newlines
+   (buffer-substring (overlay-start git-commit-msg-overlay)
+                     (overlay-end git-commit-msg-overlay))))
 
 ;;;; ====================================== git process interaction =====================================
 
