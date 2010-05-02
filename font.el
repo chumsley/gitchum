@@ -1,4 +1,5 @@
 ;; Value of `font-lock-keywords' in diff-mode.
+;; Still not sure what the T represents.
 (t
  (("\\(^@@ -\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? \\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\) @@\\)\\(.*\\)$"
    (1 diff-hunk-header-face)
