@@ -396,6 +396,25 @@
     (goto-char (point-at-bol))
     (looking-at git-hunk-header-re)))
 
+(defun git-chapter-beginning ()
+  "Returns the position of the beginning of the current chapter"
+    (if (git-chapter-header-p)
+      (point-at-bol)
+      (save-excursion
+        (if (re-search-backward git-chapter-header-re nil t)
+          (point)
+          (error "No current chapter")))))
+
+(defun git-chapter-end ()
+  "Returns the position of the end of the current chapter"
+  (save-excursion
+    (goto-char (git-chapter-beginning))
+    (while (and (zerop (forward-line 1))
+                (not (git-chapter-header-p))))
+    (when (= (point) (point-at-bol))
+      (forward-line -1))
+    (point-at-eol)))
+
 (defun git-file-beginning ()
   "Returns the position of the beginning of the current file"
   (if (git-file-header-p)
@@ -821,10 +840,7 @@
 (defun git-current-chapter ()
   "Returns one of '(staged unstaged untracked) representing the current chapter for point."
   (save-excursion
-    (if (git-chapter-header-p)
-      (goto-char (point-at-bol))
-      (or (re-search-backward git-chapter-header-re nil t)
-          (error "No current chapter")))
+    (goto-char (git-chapter-beginning))
     (looking-at git-chapter-header-re)
     (let ((h (match-string 1)))
       (cond
@@ -989,12 +1005,21 @@
   (git-commit-mode)
   (toggle-read-only 0)
   (let ((inhibit-read-only t))
+    ;; Set up the status sub-display
     (git-status-internal)
     (insert (substitute-command-keys git-commit-buffer-instructions))
+
+    (save-excursion
+      (when (and (git-next-file-or-hunk)
+                 (eq 'staged (git-current-chapter)))
+        (subst-char-in-region (git-chapter-beginning) (git-chapter-end) ?\^M ?\n)))
+    
     (goto-char (point-min))
     (insert "\n\n\n")
     (put-text-property (point) (point-max) 'read-only t)
     (put-text-property (point) (point-max) 'keymap git-status-map)
+
+    ;; Set up the message overlay
     (unless git-commit-msg-overlay
       (set (make-local-variable 'git-commit-msg-overlay)
            (make-overlay (point-min) (point) nil nil t)))
@@ -1008,6 +1033,7 @@
 (defun git-commit-execute ()
   "Commit the currently-staged changes using a message from the current commit buffer!"
   (interactive)
+  (message "git commit")
   (git-sync-command (current-buffer) "commit" "-m" (git-commit-message)))
 
 (defun git-commit-message ()
