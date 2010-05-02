@@ -1,4 +1,4 @@
-;; Value of `font-lock-keywords' in diff-mode
+;; Value of `font-lock-keywords' in diff-mode.
 (t
  (("\\(^@@ -\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? \\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\) @@\\)\\(.*\\)$"
    (1 diff-hunk-header-face)
