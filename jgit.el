@@ -759,8 +759,7 @@
   (let ((plist-assoc (git-collect-hunk-plists)))
     (git-hunks '("add" "--patch") plist-assoc
                (lambda (str)
-                 (darcs-quit-current)
-                 (git-commit)))))
+                 (git-commit t)))))
 
 ;;;; --------------------------------- git-query-manifest --------------------------------
 
