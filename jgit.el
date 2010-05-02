@@ -130,7 +130,7 @@
   :group 'git)
 
 (defface git-branch
-    '((t (:bold t)))
+    '((t (:bold t :background "white")))
   "Face used to highlight the branch name"
   :group 'git)
 
