@@ -1050,7 +1050,7 @@
   (interactive)
   (when (yes-or-no-p "Do you really want to revert these changes? ")
     (let ((plist-assoc (git-collect-hunk-plists)))
-      (git-hunks '("stash" "save" "--patch") plist-assoc
+      (git-hunks '("stash" "save" "--patch" "cherry-picked revert") plist-assoc
                  (lambda (str)
                    (git-sync-command nil "stash" "drop")
                    (git-whatsnew t)
