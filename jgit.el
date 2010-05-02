@@ -1139,7 +1139,7 @@
    Side effect: Inserts a newline at the end of the prompt if one is not already present."
   (let ((case-fold-search nil))
     (if opt
-      (looking-at (format "Stage this hunk \\[[^]]*\\/%s\\/" opt))
+      (looking-at (format "Stage this hunk [^]]*%s[^]]*\\]\\?" opt))
       (looking-at "Stage this hunk [^]]*\\]\\?"))))
 
 (defun git-hunk-response ()
