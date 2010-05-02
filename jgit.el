@@ -1139,10 +1139,15 @@
           
           ;; Other hunk that we have a response for
           ((and (git-stage-prompt) (git-hunk-response))
-           (process-send-string proc (format "%s\n" (git-hunk-response))))
+           (let ((cmd (format "%s\n" (git-hunk-response))))
+             (save-excursion (goto-char (point-at-eol))
+                             (insert cmd))
+             (process-send-string proc cmd)))
           
           ;; Hunk that we have no response for
           ((git-stage-prompt "n")
+           (save-excursion (goto-char (point-at-eol))
+                           (insert "n [default]\n"))
            (process-send-string proc "n\n")))
         (forward-line)))))
 
