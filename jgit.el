@@ -1033,7 +1033,11 @@
   "Commit the currently-staged changes using a message from the current commit buffer!"
   (interactive)
   (message "git commit")
-  (git-sync-command (current-buffer) "commit" "-m" (git-commit-message)))
+  (git-sync-command (current-buffer) "commit" "-m" (git-commit-message))
+  ;; If we return to a whatsnew or status window, refresh it
+  (when (or (eq major-mode 'git-whatsnew)
+          (eq major-mode 'git-status))
+    (revert-buffer t t t)))
 
 (defun git-commit-message ()
   "Return the commit message from the current buffer"
