@@ -1046,7 +1046,13 @@
 
 (defun git-push ()
   (interactive)
+  (message "git push")
   (git-sync-command nil "push"))
+
+(defun git-pull ()
+  (interactive)
+  (message "git pull")
+  (git-sync-command nil "pull"))
 
 ;;;; ====================================== git process interaction =====================================
 
