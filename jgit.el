@@ -296,7 +296,7 @@
                      latest-filename "\n")))
 
           ;; Ensure that hunk headers don't have context lines at the end
-          ((looking-at "@@ \\([^@]*\\) @@\\([\r\n]*\\)")
+          ((looking-at "@@ \\([^@]*\\) @@\\([^\r\n]*\\)")
            (unless (zerop (length (match-string 2)))
              (save-excursion
                (goto-char (match-beginning 2))
