@@ -1027,12 +1027,11 @@
 (defun git-sync-command (killable-buffer &rest args)
   "Run git <args. synchronously.  Prints output as a message; kills KILLABLE-BUFFER on success if non-nil."
   (let ((ret nil))
-    ;;TODO message cmd
     (with-temp-buffer
       (setq ret (apply 'call-process "git" nil (list (current-buffer) t) nil args))
       (while (progn
                (goto-char (point-min))
-               (when (re-search-forward "^[^\r\n]*\r")
+               (when (re-search-forward "^[^\r\n]*\r\\|^# [^\n]*\n\\|^\r?\n" nil t)
                  (delete-region (match-beginning 0) (match-end 0))
                  t)))
       (message "%s" (buffer-substring (point-min) (point-max))))
