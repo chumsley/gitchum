@@ -449,19 +449,23 @@
              (goto-char (point-at-eol))
              (and (re-search-forward "^@@" nil t)
                   (match-beginning 0)))))
-    (if p
+    (if (null p)
+      (unless noerror (error "No more patches"))
       (goto-char p)
-      (unless noerror (error "No more patches")))))
+      (git-maybe-recenter))))
 
 (defun git-next-file-or-hunk (&optional noerror)
-  "Move point to the beginning of the next hunk or file header"
+  "Move point to the beginning of the next hunk or file header.
+  Returns non-NIL only if move was successful (i.e., not at
+  eob)."
   (let ((p (save-excursion
              (goto-char (point-at-eol))
              (and (re-search-forward (format "^@@\\|%s" git-file-header-re) nil t)
                   (match-beginning 0)))))
-    (if p
+    (if (null p)
+      (unless noerror (error "No more patches"))
       (goto-char p)
-      (unless noerror (error "No more patches")))))
+      (git-maybe-recenter))))
 
 (defun git-prev-hunk (&optional noerror)
   "Move point to the beginning of the previous hunk"
@@ -471,9 +475,10 @@
              (and (re-search-backward "^@@" nil t)
                   (match-beginning 0)))))
                
-    (if p
+    (if (null p)
+      (unless noerror (error "No more patches"))
       (goto-char p)
-      (unless noerror (error "No more patches")))))
+      (git-maybe-recenter))))
 
 (defun git-next-file ()
   "Move point to the beginning of the next file"
@@ -482,9 +487,10 @@
              (goto-char (point-at-eol))
              (and (re-search-forward git-file-header-re nil t)
                   (match-beginning 0)))))
-    (if p
+    (if (null p)
+      (error "No more files")
       (goto-char p)
-      (error "No more files"))))
+      (git-maybe-recenter))))
 
 (defun git-prev-file ()
   "Move point to the beginning of the previous file"
@@ -495,9 +501,10 @@
              (and (re-search-backward git-file-header-re nil t)
                   (match-beginning 0)))))
                
-    (if p
+    (if (null p)
+      (error "No more files")
       (goto-char p)
-      (error "No more files"))))
+      (git-maybe-recenter))))
 
 (defun git-expand-file ()
   "Expand the current file"
@@ -1113,6 +1120,16 @@
 
 
 ;;;; ============================================ From xdarcs ===========================================
+
+(defun git-maybe-recenter (&optional median-height)
+  "Recenter if we are more than MEDIAN-HEIGHT lines from the top of the buffer"
+  (setq median-height (or median-height (/ (window-body-height) 4)))
+  (let ((median-line (+ (line-number (window-start))
+                        median-height)))
+    (when (> (line-number) median-line)
+      (recenter median-height)))
+  (point))
+
 ;; kill-current-buffer-process
 ;; one-line-buffer
 ;; darcs-quit-current
