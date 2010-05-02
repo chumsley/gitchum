@@ -1007,19 +1007,40 @@
   
 (defun git-commit-execute ()
   "Commit the currently-staged changes using a message from the current commit buffer!"
-  (with-temp-buffer
-    (call-process "git" nil (list (current-buffer) t) nil "commit" "-m" (git-commit-message))
-    (message (buffer-substring (point-min) (point-max)))))
+  (interactive)
+  (git-sync-command (current-buffer) "commit" "-m" (git-commit-message)))
 
-  
 (defun git-commit-message ()
   "Return the commit message from the current buffer"
   (darcs-trim-newlines
    (buffer-substring (overlay-start git-commit-msg-overlay)
                      (overlay-end git-commit-msg-overlay))))
 
+;;;; ---------------------------- simple pass-through commands ---------------------------
+
+(defun git-push ()
+  (interactive)
+  (git-sync-command nil "push"))
+
 ;;;; ====================================== git process interaction =====================================
 
+(defun git-sync-command (killable-buffer &rest args)
+  "Run git <args. synchronously.  Prints output as a message; kills KILLABLE-BUFFER on success if non-nil."
+  (let ((ret nil))
+    ;;TODO message cmd
+    (with-temp-buffer
+      (setq ret (apply 'call-process "git" nil (list (current-buffer) t) nil args))
+      (while (progn
+               (goto-char (point-min))
+               (when (re-search-forward "^[^\r\n]*\r")
+                 (delete-region (match-beginning 0) (match-end 0))
+                 t)))
+      (message "%s" (buffer-substring (point-min) (point-max))))
+    (when (and (zerop ret)
+               killable-buffer)
+      (kill-buffer killable-buffer))
+    ret))
+  
 (defvar git-hunks-scan-pos nil
   "The point that `git-hunks-filter' should start scanning from")
 
