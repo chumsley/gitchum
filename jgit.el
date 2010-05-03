@@ -1349,7 +1349,7 @@
   (save-excursion
     (re-search-backward "^@@ [^@]* @@")
     (let ((hunk-id (match-string 0)))
-      (re-search-backward "^--- a/\\([^\r\n]*\\)$")
+      (re-search-backward "^--- a/\\([^\r\n\t]*\\)\t?$")
       (let* ((hunk-filename (match-string 1))
              (hunk-key (format "%s/%s" hunk-filename hunk-id))
              (hunk-plist (cdr (assoc hunk-key git-responses))))
