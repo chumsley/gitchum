@@ -216,7 +216,13 @@
   "Switch to a readonly git command window with the
   default-directory set to the repo root.  Contents are erased,
   but local variables might be leftover from previous instances."
-  (let ((repo-dir default-directory)) ;TODO `git-repo-dir'
+  (let ((repo-dir (let ((dir (file-name-directory (expand-file-name (or (buffer-file-name (current-buffer)) default-directory))))
+                        (olddir "/"))
+                    (while (and (not (equal dir olddir))
+                                (not (file-directory-p (concat dir "/.git"))))
+                      (setq olddir dir
+                            dir (file-name-directory (directory-file-name dir))))
+                    (and (not (equal dir olddir)) dir))))
     (if same-window
       (switch-to-buffer (format "*git %s: (%s)*" name repo-dir))
       (switch-to-buffer-other-window (format "*git %s: (%s)*" name repo-dir)))
@@ -518,7 +524,6 @@
              (goto-char (point-at-bol))
              (and (re-search-backward git-file-header-re nil t)
                   (match-beginning 0)))))
-               
     (if (null p)
       (unless noerror (error "No more files"))
       (goto-char p)
