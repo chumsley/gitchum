@@ -154,22 +154,22 @@
 
 (defvar git-prefix-map
   (let ((map (make-sparse-keymap)))
-;    (define-key map [?a] 'git-add)
+    (define-key map [?a] 'git-add)
 ;    (define-key map [?b] 'git-blame)
 ;    (define-key map [?l] 'git-log)
 ;    (define-key map [?=] 'git-diff)
+;    (define-key map [?-] 'git-ediff)
 ;    (define-key map [??] 'git-describe-bindings)
 ;    (define-key map [?d] 'git-describe-patch)
-;    (define-key map [?-] 'git-ediff)
 ;    (define-key map [?f] 'git-filelog)
     (define-key map [?G] 'git-pull)
     (define-key map [?S] 'git-push)
-;    (define-key map [?i] 'git-init)
+    (define-key map [?i] 'git-init)
     (define-key map [?m] 'git-query-manifest)
     (define-key map [?s] 'git-status)
     (define-key map [?w] 'git-whatsnew)
     (define-key map [?c] 'git-commit)
-;    (define-key map [?x] 'git-remove)
+    (define-key map [?x] 'git-remove)
     map)
   "The prefix for git commands")
 
@@ -1074,6 +1074,18 @@
   (interactive)
   (message "git pull")
   (git-sync-command nil "pull"))
+
+(defun git-init ()
+  (interactive)
+  (git-sync-command nil "init"))
+
+(defun git-add ()
+  (interactive)
+  (git-sync-command nil "add" (buffer-truename (current-buffer))))
+
+(defun git-remove ()
+  (interactive)
+  (git-sync-command nil "rm" (buffer-truename (current-buffer))))
 
 ;;;; ====================================== git process interaction =====================================
 
