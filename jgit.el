@@ -955,6 +955,27 @@
              (goto-char e)
              (message nil)))
 
+          ((looking-at "#\t\\(renamed:\\)?[ ]+\\(.*\\) -> \\(.*\\)$")
+           (let ((old-filename (match-string 2))
+                 (new-filename (match-string 3))
+                 (s nil))
+             (kill-this-line)
+             (setq s (point))
+             (ecase chapter
+               (staged (message "git diff --cached -- %s" new-filename)
+                       (call-process "git" nil (current-buffer) nil "diff" "--cached" "--" new-filename)))
+             (set-marker e (point))
+             (save-restriction
+               (narrow-to-region s e)
+               (goto-char (point-min))
+               (git-markup-hunks)
+               (goto-char (point-min))
+               (or (git-file-header-p) (git-next-file))
+               (forward-line 1)
+               (insert "# renamed from '" old-filename "'\n"))
+             (goto-char e)
+             (message nil)))
+          
           ((and (eq chapter 'untracked)
                 (looking-at "#\t\\(.*\\)$"))
            (let ((filename (match-string 1))
