@@ -180,8 +180,8 @@
   (let ((map (make-sparse-keymap)))
     (define-key map [?\r] 'git-toggle-expanded)
     (define-key map [(control return)] 'git-find-in-other-window)
-    (define-key map [?j] 'git-next-hunk)
-    (define-key map [?k] 'git-prev-hunk)
+    (define-key map [?j] 'git-next-dwim)
+    (define-key map [?k] 'git-prev-dwim)
     (define-key map [?J] 'git-next-file)
     (define-key map [?K] 'git-prev-file)
     (define-key map [?a] 'git-expand-all-hunks)
@@ -490,7 +490,7 @@
   "Move point to the beginning of the previous hunk"
   (interactive)
   (let ((p (save-excursion
-             (goto-char (git-hunk-beginning))
+             (goto-char (point-at-bol))
              (and (re-search-backward "^@@" nil t)
                   (match-beginning 0)))))
                
@@ -499,7 +499,7 @@
       (goto-char p)
       (git-maybe-recenter))))
 
-(defun git-next-file ()
+(defun git-next-file (&optional noerror)
   "Move point to the beginning of the next file"
   (interactive)
   (let ((p (save-excursion
@@ -507,24 +507,37 @@
              (and (re-search-forward git-file-header-re nil t)
                   (match-beginning 0)))))
     (if (null p)
-      (error "No more files")
+      (unless noerror (error "No more files"))
       (goto-char p)
       (git-maybe-recenter))))
 
-(defun git-prev-file ()
+(defun git-prev-file (&optional noerror)
   "Move point to the beginning of the previous file"
   (interactive)
   (let ((p (save-excursion
-             (unless (git-file-header-p)
-               (re-search-backward git-file-header-re nil t))
+             (goto-char (point-at-bol))
              (and (re-search-backward git-file-header-re nil t)
                   (match-beginning 0)))))
                
     (if (null p)
-      (error "No more files")
+      (unless noerror (error "No more files"))
       (goto-char p)
       (git-maybe-recenter))))
 
+(defun git-next-dwim ()
+  "Go to the next hunk if possible, or the next file otherwise."
+  (interactive)
+  (or (git-next-hunk t)
+      (git-next-file t)
+      (error "No more files or hunks")))
+
+(defun git-prev-dwim ()
+  "Go to the previous hunk if possible. or the previous file otherwise."
+  (interactive)
+  (or (git-prev-hunk t)
+      (git-prev-file t)
+      (error "No more files or hunks")))
+  
 (defun git-expand-file ()
   "Expand the current file"
   (let ((inhibit-read-only t))
@@ -876,6 +889,8 @@
     (define-key map [?\ ] 'git-toggle-file-staged)
     (define-key map [?n] 'git-next-file)
     (define-key map [?p] 'git-prev-file)
+    (define-key map [(control ?c) (control ?c)] 'git-commit-from-status)
+    (define-key map [(control ?c) (control ?s)] 'darcs-quit-current)
     map))
 
 (defun git-status-mode ()
@@ -962,6 +977,11 @@
         (unless lines-left
           (setq lines-left (forward-line 1)))))))
 
+(defun git-commit-from-status ()
+  "Commit from the status window (i.e., don't pop up commit in a separate window)."
+  (interactive)
+  (git-commit t))
+
 ;;;; ------------------------------------- git-commit ------------------------------------
 
 (defvar git-commit-map
@@ -1037,7 +1057,7 @@
   (git-sync-command (current-buffer) "commit" "-m" (git-commit-message))
   ;; If we return to a whatsnew or status window, refresh it
   (when (or (eq major-mode 'git-whatsnew)
-          (eq major-mode 'git-status))
+            (eq major-mode 'git-status))
     (revert-buffer t t t)))
 
 (defun git-commit-message ()
