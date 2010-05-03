@@ -1,0 +1,10 @@
+diff --git a/foob b/foob
+index 4941cde..f7e5420 100644
+--- a/foob
++++ b/foob
+@@ -1,3 +1,5 @@
++
++
+ Topline.
+ A line above.
+ Some stuff.
