@@ -382,7 +382,7 @@
        (lambda (ignore-auto noconfirm)
          (git-whatsnew t)))
   (setq selective-display t)
-  (turn-on-font-lock-if-desired))
+  (turn-on-font-lock-if-enabled))
 
 (defun git-chapter-header-p ()
   "Non-nil if point is currently on a chapter header line"
@@ -817,7 +817,7 @@
   (set (make-local-variable 'revert-buffer-function)
        (lambda (ignore-auto noconfirm)
          (git-query-manifest t)))
-  (turn-on-font-lock-if-desired))
+  (turn-on-font-lock-if-enabled))
 
 (defun git-goto-manifest-file ()
   "Go to the file listed on the current line"
@@ -909,7 +909,7 @@
        (lambda (ignore-auto noconfirm)
          (git-status t)))
   (setq selective-display t)
-  (turn-on-font-lock-if-desired))
+  (turn-on-font-lock-if-enabled))
 
 (defun git-markup-status ()
   "Converts status output to something usable"
@@ -1040,7 +1040,7 @@
        (lambda (ignore-auto noconfirm)
          (git-commit t (git-commit-message))))
   (setq selective-display t)
-  (turn-on-font-lock-if-desired))
+  (turn-on-font-lock-if-enabled))
 
 (defvar git-commit-msg-overlay nil)
 
