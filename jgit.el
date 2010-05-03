@@ -236,10 +236,14 @@
   state that should be passed to git, whereas git-display-state
   describes the way the hunks should look.")
 
-(defun git-whatsnew (&optional same-window state-assoc)
+(defvar git-current-target nil
+  "The current target before refresh")
+
+(defun git-whatsnew (&optional same-window state-assoc current-target)
   "Prints a list of all the changes in the current repo"
   (interactive)
   (git-command-window 'whatsnew same-window)
+  (set (make-local-variable 'git-current-target) current-target)
   (set (make-local-variable 'git-display-state) state-assoc)
   (git-hunks '("add" "--patch") git-refined-hunks
              (lambda (raw-output)
@@ -254,6 +258,8 @@
                  (save-excursion
                    (insert cooked))
                  (git-apply-plists git-display-state t)
+                 (when git-current-target
+                   (git-goto-target git-current-target))
                  (message nil)))))
 
 (defun git-markup-hunks ()
@@ -387,7 +393,8 @@
   (use-local-map git-whatsnew-map)
   (set (make-local-variable 'revert-buffer-function)
        (lambda (ignore-auto noconfirm)
-         (git-whatsnew t (git-collect-hunk-plists))))
+         (let ((target (git-current-target)))
+           (git-whatsnew t (git-collect-hunk-plists) target))))
   (setq selective-display t)
   (turn-on-font-lock-if-enabled))
 
@@ -595,13 +602,13 @@
      (git-collapse-hunk))
     (t (git-expand-hunk))))
 
-(defun git-find-in-other-window ()
-  "Find the current file; If point is at a hunk, go to the appropriate location within the file."
-  (interactive)
+(defun git-current-target ()
+  "Returns a list of the form (FILENAME &optional LINE-NUMBER RECENTER-TO)."
   (let ((filename (git-current-filename))
         (s (git-hunk-beginning t))
         (e (point))
-        (target nil))
+        (target nil)
+        (recenter-to (- (line-number) (line-number (window-start)))))
     (when s
       (save-excursion
         (goto-char s)
@@ -611,10 +618,60 @@
                     (<= (point-at-eol) e))
           (unless (looking-at "^-")
             (setq target (+ target 1))))))
+    (list filename
+          (when s target)
+          recenter-to)))
 
-    (find-file-other-window (concat default-directory "/" filename))
-    (when target
-      (goto-line target))))
+(defun git-goto-target (target)
+  "Goes to the point that is nearest TARGET without being over"
+  (let ((filename (first target))
+        (line (second target))
+        (recenter-to (third target))
+        (e nil)
+        (current-line)
+        (moved-p))
+        
+    (goto-char (point-min))
+    ;; Try to find the appropriate file
+    (while (and (not (string= filename (git-current-filename)))
+                (git-next-file t)))
+    (if (not (string= filename (git-current-filename)))
+      (goto-char (point-min))
+      ;; Find appropriate hunk
+      (setq e (git-file-end))
+      (when line
+        (while (and (setq moved-p (git-next-hunk t))
+                    (<= (point) e)
+                    (progn (looking-at git-hunk-header-re)
+                           (<= (string-to-number (match-string 2)) line))))
+        (when moved-p
+          (git-prev-hunk))
+        ;; Find appropriate line of the hunk
+        (setq e (git-hunk-end))
+        (setq current-line (progn (looking-at git-hunk-header-re)
+                                  (string-to-number (match-string 2))))
+        (while (and (<= current-line line)
+                    (zerop (forward-line 1))
+                    (<= (point-at-eol) e))
+          (unless (looking-at "^-")
+            (setq current-line (+ current-line 1))))
+        (unless (= (+ line 1) current-line)
+          (git-prev-hunk)))
+      ;; Recenter to the same place
+      (when recenter-to ;TEST
+        (message "recentering to %d" recenter-to) 
+        (recenter recenter-to)))))
+      
+          
+      
+
+(defun git-find-in-other-window ()
+  "Find the current file; If point is at a hunk, go to the appropriate location within the file."
+  (interactive)
+  (let ((target (git-current-target)))
+    (find-file-other-window (concat default-directory "/" (first target)))
+    (when (second target)
+      (goto-line (second target)))))
 
 (defvar *git-current-filename* nil
   "Contains a record describing filename of the current enclosing
