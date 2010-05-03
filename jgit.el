@@ -279,17 +279,12 @@
                  delcheated nil)
            (kill-this-line))
 
-          ((looking-at "--- \\(?:a/\\([^\r\n ]*\\)$\\|/dev/null\\)")
+          ((looking-at "--- \\(?:a/\\([^\r\n\t]*\\)\t?\n\\|/dev/null\\)")
            (let ((filename (match-string 1)))
              (setq latest-filename filename)
              (kill-this-line)))
 
-          ((looking-at "--- \\(?:a/\\([^\r\n\t]*\\)\t\\|/dev/null\\)")
-           (let ((filename (match-string 1)))
-             (setq latest-filename filename)
-             (kill-this-line)))
-
-          ((looking-at "\\+\\+\\+ \\(?:b/\\([^\r\n]*\\)\\|/dev/null\\)")
+          ((looking-at "\\+\\+\\+ \\(?:b/\\([^\r\n\t]*\\)\t?\n\\|/dev/null\\)")
            (let ((filename (match-string 1)))
              (setq latest-filename (or filename latest-filename))
              (kill-this-line)
