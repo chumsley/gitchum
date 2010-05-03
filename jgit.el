@@ -279,7 +279,12 @@
                  delcheated nil)
            (kill-this-line))
 
-          ((looking-at "--- \\(?:a/\\([^\r\n]*\\)\\|/dev/null\\)")
+          ((looking-at "--- \\(?:a/\\([^\r\n ]*\\)$\\|/dev/null\\)")
+           (let ((filename (match-string 1)))
+             (setq latest-filename filename)
+             (kill-this-line)))
+
+          ((looking-at "--- \\(?:a/\\([^\r\n\t]*\\)\t\\|/dev/null\\)")
            (let ((filename (match-string 1)))
              (setq latest-filename filename)
              (kill-this-line)))
@@ -854,13 +859,14 @@
         (filename (or (git-current-filename) (error "Cannot find current filename"))))
     (ecase chapter
       (staged
-       (message "git reset HEAD %s" filename)
-       (message (shell-command-to-string (format "git reset HEAD %s" filename))))
+       (git-sync-command nil "reset" "HEAD" "--" filename))
       ((unstaged untracked)
-       (message "git add %s" filename)
-       (message (shell-command-to-string (format "git add %s" filename)))))
+       (if (file-exists-p filename)
+         (git-sync-command nil "add" "--" filename)
+         (git-sync-command nil "rm" "--" filename))))
     (revert-buffer t t t)
-    (re-search-forward (format "^[-ld].*: %s" filename) nil t)
+    (goto-char (point-min))
+    (re-search-forward (format "^[-ld].*:  ?%s" filename) nil t)
     (goto-char (point-at-bol))))
   
 
@@ -927,10 +933,10 @@
              (kill-this-line)
              (setq s (point))
              (ecase chapter
-               (staged (message "git diff --cached %s" filename)
-                       (call-process "git" nil (current-buffer) nil "diff" "--cached" filename))
-               (unstaged (message "git diff %s" filename)
-                       (call-process "git" nil (current-buffer) nil "diff" filename)))
+               (staged (message "git diff --cached -- %s" filename)
+                       (call-process "git" nil (current-buffer) nil "diff" "--cached" "--" filename))
+               (unstaged (message "git diff -- %s" filename)
+                       (call-process "git" nil (current-buffer) nil "diff" "--" filename)))
              (set-marker e (point))
              (save-restriction
                (narrow-to-region s e)
@@ -1083,6 +1089,7 @@
                  t)))
       (and (goto-char (point-max))
            (looking-at "^")
+           (not (= (point) (point-min)))
            (delete-char -1))
       (message "%s" (buffer-substring (point-min) (point-max))))
     (when (and (zerop ret)
@@ -1151,8 +1158,8 @@
    Side effect: Inserts a newline at the end of the prompt if one is not already present."
   (let ((case-fold-search nil))
     (if opt
-      (looking-at (format "\\(?:Stage\\|Stash\\) this hunk [^]]*%s[^]]*\\]\\?" opt))
-      (looking-at "\\(?:Stage\\|Stash\\) this hunk [^]]*\\]\\?"))))
+      (looking-at (format "\\(?:Stage\\|Stash\\) \\(this hunk\\|deletion\\) [^]]*%s[^]]*\\]\\?" opt))
+      (looking-at "\\(?:Stage\\|Stash\\) \\(this hunk\\|deletion\\) [^]]*\\]\\?"))))
 
 (defun git-hunk-response ()
   "If we have a response for this hunk, then return it, otherwise return NIL"
