@@ -231,10 +231,16 @@
 
 ;;;; ------------------------------------ git-whatsnew -----------------------------------
 
-(defun git-whatsnew (&optional same-window)
+(defvar git-display-state nil
+  "Note: Distinct from git-responses; git-responses describes the
+  state that should be passed to git, whereas git-display-state
+  describes the way the hunks should look.")
+
+(defun git-whatsnew (&optional same-window state-assoc)
   "Prints a list of all the changes in the current repo"
   (interactive)
   (git-command-window 'whatsnew same-window)
+  (set (make-local-variable 'git-display-state) state-assoc)
   (git-hunks '("add" "--patch") git-refined-hunks
              (lambda (raw-output)
                (let ((inhibit-read-only t)
@@ -247,6 +253,7 @@
                  (git-whatsnew-mode)
                  (save-excursion
                    (insert cooked))
+                 (git-apply-plists git-display-state t)
                  (message nil)))))
 
 (defun git-markup-hunks ()
@@ -380,7 +387,7 @@
   (use-local-map git-whatsnew-map)
   (set (make-local-variable 'revert-buffer-function)
        (lambda (ignore-auto noconfirm)
-         (git-whatsnew t)))
+         (git-whatsnew t (git-collect-hunk-plists))))
   (setq selective-display t)
   (turn-on-font-lock-if-enabled))
 
@@ -640,16 +647,22 @@
           (looking-at git-file-header-re)
           (match-string 2)))))
 
-(defun git-on-all-hunks (thunk)
-  "Call THUNK with point on every hunk in the buffer."
+(defun git-on-all-hunks (thunk &optional include-files)
+  "Call THUNK with point on every hunk header in the buffer.  If
+  INCLUDE-FILES is non-NIL, also calls THUNK on every file
+  header."
   (let ((*git-current-filename* nil))
     (save-excursion
       (goto-char (point-min))
       (when (git-file-header-p)
-        (setq *git-current-filename* (match-string 2)))
+        (setq *git-current-filename* (match-string 2))
+        (when include-files
+          (save-excursion
+            (funcall thunk))))
       (while (git-next-file-or-hunk t)
-        (if (git-file-header-p)
-          (setq *git-current-filename* (match-string 2))
+        (when (git-file-header-p)
+          (setq *git-current-filename* (match-string 2)))
+        (when (or include-files (git-hunk-header-p))
           (save-excursion
             (funcall thunk)))))))
 
@@ -753,14 +766,74 @@
 (defun git-collect-hunk-plists ()
   "Collect state plists from each hunk in the current buffer, and
   return an assoc list from hunk key to the associated state plist."
- (let ((state-assoc nil))
+  (let ((state-assoc nil))
    (git-on-all-hunks
     (lambda ()
-      (let ((plist (git-hunk-plist)))
-        (push (cons (plist-get plist :key) plist)
-              state-assoc))))
+      (cond
+        ((and (git-file-header-p) (git-file-expanded-p))
+         (push (cons (format "%s/" (git-current-filename))
+                     (list :key (format "%s/" (git-current-filename)) :expanded-p t))
+               state-assoc))
+        ((git-file-header-p)
+         (push (cons (format "%s/" (git-current-filename))
+                     (list :key (format "%s/" (git-current-filename)) :expanded-p nil))
+               state-assoc)
+         (save-excursion
+           (save-restriction
+             (narrow-to-region (git-file-beginning) (git-file-end))
+             (git-expand-file)
+             (git-collapse-all-hunks)
+             (forward-line 1)
+             (setq state-assoc (append (git-collect-hunk-plists) state-assoc))
+             (git-collapse-file))))
+        (t (let ((plist (git-hunk-plist)))
+             (push (cons (plist-get plist :key) plist)
+                   state-assoc)))))
+    t)
    (append (nreverse state-assoc)
            git-refined-hunks)))
+
+(defun git-apply-plists (state-assoc include-files)
+  "Restore the state of files and hunks according to the members of STATE-ASSOC."
+  (git-on-all-hunks
+   (lambda ()
+     (let* ((file-p (git-file-header-p))
+            (key (if file-p
+                   (format "%s/" (git-current-filename))
+                   (plist-get (git-hunk-plist) :key)))
+            (plist (cdr (assoc key state-assoc))))
+       (when plist
+         (if file-p
+           (cond
+             ((and (plist-get plist :expanded-p)
+                   (not (git-file-expanded-p)))
+              (git-expand-file))
+             ((and (not (plist-get plist :expanded-p))
+                   (git-file-expanded-p))
+              ;; First recursively handle all the contained hunks before collapsing file
+              (save-excursion
+                (save-restriction
+                  (narrow-to-region (git-file-beginning) (git-file-end))
+                  (forward-line 1)
+                  (git-apply-plists state-assoc nil)
+                  (git-collapse-file)))))
+           
+           (cond
+             ((and (not (plist-get plist :excluded-p))
+                   (git-hunk-excluded-p))
+              (git-include-hunk))
+             ((and (plist-get plist :excluded-p)
+                   (not (git-hunk-excluded-p)))
+              (git-exclude-hunk)))
+
+           (cond
+             ((and (not (plist-get plist :expanded-p))
+                   (git-hunk-expanded-p))
+              (git-collapse-hunk))
+             ((and (plist-get plist :expanded-p)
+                   (not (git-hunk-expanded-p)))
+              (git-expand-hunk)))))))
+   include-files))
 
 (defun git-stage-from-whatsnew ()
   "Stage the patches that are included in the current whatsnew buffer"
