@@ -1146,7 +1146,14 @@
     (define-key map [(control ?c) ?n] 'git-next-file)
     map)
   "Only thing that's different about the commit map is that is has a `C-c C-c' binding")
-  
+
+(defvar git-commit-status-submap
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map git-status-map)
+    (define-key map [(control ?c) (control ?c)] 'git-commit-execute)
+    map)
+  "Only thing that's different about the commit map is that is has a `C-c C-c' binding")
+
 (defvar git-commit-buffer-instructions
   "# Please enter the commit message for your changes.
 # (Comment lines starting with '#' will not be included)
@@ -1193,7 +1200,7 @@
     (goto-char (point-min))
     (insert "\n\n\n")
     (put-text-property (point) (point-max) 'read-only t)
-    (put-text-property (point) (point-max) 'keymap git-status-map)
+    (put-text-property (point) (point-max) 'keymap git-commit-status-submap)
 
     ;; Set up the message overlay
     (unless git-commit-msg-overlay
