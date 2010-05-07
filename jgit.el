@@ -396,7 +396,7 @@
          (let ((target (git-current-target)))
            (git-whatsnew t (git-collect-hunk-plists) target))))
   (setq selective-display t)
-  (turn-on-font-lock-if-enabled))
+  (turn-on-font-lock))
 
 (defun git-chapter-header-p ()
   "Non-nil if point is currently on a chapter header line"
@@ -947,7 +947,7 @@
   (set (make-local-variable 'revert-buffer-function)
        (lambda (ignore-auto noconfirm)
          (git-query-manifest t)))
-  (turn-on-font-lock-if-enabled))
+  (turn-on-font-lock))
 
 (defun git-goto-manifest-file ()
   "Go to the file listed on the current line"
@@ -1039,7 +1039,7 @@
        (lambda (ignore-auto noconfirm)
          (git-status t)))
   (setq selective-display t)
-  (turn-on-font-lock-if-enabled))
+  (turn-on-font-lock))
 
 (defun git-markup-status ()
   "Converts status output to something usable"
@@ -1177,7 +1177,7 @@
        (lambda (ignore-auto noconfirm)
          (git-commit t (git-commit-message))))
   (setq selective-display t)
-  (turn-on-font-lock-if-enabled))
+  (turn-on-font-lock))
 
 (defvar git-commit-msg-overlay nil)
 
@@ -1414,4 +1414,5 @@
 ;; darcs-quit-current
 ;; darcs-trim-newlines
 
+(provide 'jgit)
 ;;; jgit.el ends here
