@@ -1113,18 +1113,23 @@
           
           ((and (eq chapter 'untracked)
                 (looking-at "#\t\\(.*\\)$"))
-           (let ((filename (match-string 1))
-                 (s nil))
+           (let* ((filename (match-string 1))
+                  (s nil)
+                  (attrs (file-attributes filename)))
              (kill-this-line)
              (setq s (point))
-             (message "git diff %s" filename)
-             (call-process "git" nil (current-buffer) nil "diff" "/dev/null" filename)
+             (insert (format "new file mode %d%.4o\n"
+                             (if (stringp (elt attrs 0)) 12 10)
+                             (file-modes filename)))
+             (insert "--- /dev/null\n"
+                     "+++ b/" filename "\n")
              (set-marker e (point))
              (save-restriction
                (narrow-to-region s e)
                (goto-char (point-min))
                (git-markup-hunks))
              (goto-char e)
+             (setq lines-left nil)
              (message nil)))
           
           ;; Kill anything we don't recognize
