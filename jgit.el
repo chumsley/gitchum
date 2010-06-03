@@ -439,14 +439,14 @@
       (forward-line -1))
     (point-at-eol)))
 
-(defun git-file-beginning ()
+(defun git-file-beginning (&optional noerror)
   "Returns the position of the beginning of the current file"
   (if (git-file-header-p)
     (point-at-bol)
     (save-excursion
       (if (re-search-backward git-file-header-re nil t)
         (point)
-        (error "No current file")))))
+        (unless noerror (error "No current file"))))))
 
 (defun git-file-end ()
   "Returns the position of the end of the current file"
@@ -702,11 +702,12 @@
 (defun git-current-filename ()
   "Returns the name of the file enclosing point."
   (or *git-current-filename*
-      (let ((fpos (git-file-beginning)))
-        (save-excursion
-          (goto-char fpos)
-          (looking-at git-file-header-re)
-          (match-string 2)))))
+      (let ((fpos (git-file-beginning t)))
+        (when fpos
+          (save-excursion
+            (goto-char fpos)
+            (looking-at git-file-header-re)
+            (match-string 2))))))
 
 (defun git-on-all-hunks (thunk &optional include-files)
   "Call THUNK with point on every hunk header in the buffer.  If
