@@ -24,7 +24,11 @@
 ;; Boston, MA 02111-1307, USA.
 
 ;;; Commentary:
-;; 
+;;
+;; Still TODO
+;; - macro to factor out common navigation code?  (just takes navigation-body and error)
+;; - Cherrypicking from commit/status?
+;; - empty new files and empty repos are not handled well
 
 ;;; Code:
 
