@@ -35,7 +35,6 @@ fi
 
 DEL_FILES=`diff --context=0 /tmp/git_files /tmp/cvs_files | grep '^\+ ' | sed 's/^\+ //g'`
 if [ no$DEL_FILES != no ]; then
-    rm $DEL_FILES
     cvs remove $DEL_FILES || exit 1
 fi
 
