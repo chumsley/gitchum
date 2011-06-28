@@ -17,10 +17,8 @@ else
     ADDED_FILES=true
 fi    
 find . -name CVS -exec cvs_entries.sh '{}' \; | while read line; do
-    echo git add \"$line\" \|\| exit 1 # TEST
     git add "$line" || exit 1
 done
-echo added_files $ADDED_FILES #TEST
 if $ADDED_FILES; then
     git commit -m "Initial commit from $1 CVS module" || exit 1
 else
@@ -34,7 +32,6 @@ fi
 # Create the cvs_head branch and add the CVS control files
 git branch cvs_head
 git checkout cvs_head
-find . -name CVS -exec echo git add '{}/' \;  # TEST
 find . -name CVS -exec git add '{}/' \;
 git commit -m 'Added CVS control directories' || exit 1
 git checkout master

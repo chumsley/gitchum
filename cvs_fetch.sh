@@ -10,7 +10,7 @@ fi
 # Save current branch name
 CURRENT_BRANCH=`git branch | grep '^\*' | awk '{print $2}'`
 if [ $CURRENT_BRANCH = cvs_head ]; then
-    echo cvs_commit.sh: Cannot commit from cvs_head branch directly!
+    echo cvs_commit.sh: Cannot fetch from cvs_head branch directly!
     exit 1
 fi
 
@@ -32,7 +32,7 @@ else
 fi
 
 # Update files list
-git ls-files | sort > /tmp/git_files
+git ls-files | grep -v '\(/\|^\)CVS/' | sort > /tmp/git_files
 find . -name CVS -exec cvs_entries.sh '{}' \; | sed 's/^\.\///g' | sort > /tmp/cvs_files
 diff --context=0 /tmp/git_files /tmp/cvs_files | grep '^\+ ' | sed 's/^\+ //g' > /tmp/NEW_FILES
 diff --context=0 /tmp/cvs_files /tmp/git_files | grep '^\+ ' | sed 's/^\+ //g' > /tmp/DEL_FILES
@@ -43,6 +43,9 @@ done
 cat /tmp/DEL_FILES | while read line; do
     git rm "$line"
 done
+
+# Record CVS state
+find . -name CVS -exec git add '{}/' \;
 
 # Commit to git (TODO read commit comments from CVS automagically?)
 git commit -m "Updated from CVS"

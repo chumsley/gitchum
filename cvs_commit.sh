@@ -14,7 +14,8 @@ if [ $CURRENT_BRANCH = cvs_head ]; then
     exit 1
 fi
 
-# Ensure that CVS branch is up to date (Ensures that ff will fail on conflicts)
+# Ensure that CVS branch is up to date
+# (Ensures that ff will fail on conflicts)
 cvs_fetch.sh
 
 # Save current dirty state
@@ -36,7 +37,7 @@ else
 fi
 
 # Update files list
-git ls-files | sort > /tmp/git_files
+git ls-files | grep -v '\(/\|^\)CVS/' | sort > /tmp/git_files
 find . -name CVS -exec cvs_entries.sh '{}' \; | sed 's/^\.\///g' | sort > /tmp/cvs_files
 diff --context=0 /tmp/cvs_files /tmp/git_files | grep '^\+ ' | sed 's/^\+ //g' > /tmp/NEW_FILES
 diff --context=0 /tmp/git_files /tmp/cvs_files | grep '^\+ ' | sed 's/^\+ //g' > /tmp/DEL_FILES
