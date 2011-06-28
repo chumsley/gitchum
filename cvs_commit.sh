@@ -21,8 +21,7 @@ NEW_STASHES=`git stash list`
 
 # Push committed changes to the CVS branch
 echo cvs_commit.sh: Merging $CURRENT_BRANCH '-->' cvs_head
-git checkout cvs_head
-if git merge --ff-only $CURRENT_BRANCH; then
+if git checkout cvs_head && git merge --ff-only $CURRENT_BRANCH; then
     echo merge ok
 else
 # Restore working directory
