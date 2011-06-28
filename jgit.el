@@ -172,8 +172,10 @@
     (define-key map [?m] 'git-query-manifest)
     (define-key map [?s] 'git-status)
     (define-key map [?w] 'git-whatsnew)
-    (define-key map [?c] 'git-commit)
+    ;(define-key map [?c] 'git-commit)
     (define-key map [?x] 'git-remove)
+    (define-key map [?C] 'git-cvs-commit)
+    (define-key map [?U] 'git-cvs-update)
     map)
   "The prefix for git commands")
 
