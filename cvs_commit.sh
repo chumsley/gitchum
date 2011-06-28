@@ -35,16 +35,15 @@ fi
 # Update files list
 git ls-files | sort > /tmp/git_files
 find . -name CVS -exec cvs_entries.sh '{}' \; | sed 's/^\.\///g' | sort > /tmp/cvs_files
+diff --context=0 /tmp/cvs_files /tmp/git_files | grep '^\+ ' | sed 's/^\+ //g' > /tmp/NEW_FILES
+diff --context=0 /tmp/git_files /tmp/cvs_files | grep '^\+ ' | sed 's/^\+ //g' > /tmp/DEL_FILES
 
-NEW_FILES=`diff --context=0 /tmp/cvs_files /tmp/git_files | grep '^\+ ' | sed 's/^\+ //g'`
-if [ no$NEW_FILES != no ]; then
-    cvs add $NEW_FILES || exit 1
-fi
-
-DEL_FILES=`diff --context=0 /tmp/git_files /tmp/cvs_files | grep '^\+ ' | sed 's/^\+ //g'`
-if [ no$DEL_FILES != no ]; then
-    cvs remove $DEL_FILES || exit 1
-fi
+cat /tmp/NEW_FILES | while read line; do
+    cvs add "$line"
+done
+cat /tmp/DEL_FILES | while read line; do
+    cvs remove "$line"
+done
 
 # Commit to CVS
 cvs commit $*
