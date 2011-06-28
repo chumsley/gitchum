@@ -20,7 +20,7 @@ find . -name CVS -exec cvs_entries.sh '{}' \; | while read line; do
     git add "$line" || exit 1
 done
 if $ADDED_FILES; then
-    git commit -m "Initial commit from $1 CVS module" || exit 1
+    git commit -m "Initial commit from CVS module: $1" || exit 1
 else
     touch dummy
     git add dummy
