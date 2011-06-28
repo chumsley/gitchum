@@ -29,10 +29,3 @@ else
     git commit -m "Removed dummy file" || exit 1
 fi
 
-# Create the cvs_head branch and add the CVS control files
-git branch cvs_head
-git checkout cvs_head
-find . -name CVS -exec git add '{}/' \;
-git commit -m 'Added CVS control directories' || exit 1
-git checkout master
-
