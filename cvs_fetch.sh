@@ -20,7 +20,7 @@ git stash
 NEW_STASHES=`git stash list`
 
 # Switch to the cvs_head directory and pull in any changes from the server
-if git checkout cvs_head && cvs update; then
+if git checkout cvs_head && cvs update > /tmp/CVS_UPDATED; then
     echo cvs update ok
 else
 # Restore working directory
@@ -31,7 +31,13 @@ else
     exit 1
 fi
 
-# Update files list
+# Add any updated files
+cat /tmp/CVS_UPDATED | grep -v '^\?' | sed 's/^..//g' | while read line; do
+    echo git add \"$line\"
+    git add "$line"
+done
+
+# Update manifest
 git ls-files | grep -v '\(/\|^\)CVS/' | sort > /tmp/git_files
 find . -name CVS -exec cvs_entries.sh '{}' \; | sed 's/^\.\///g' | sort > /tmp/cvs_files
 diff --context=0 /tmp/git_files /tmp/cvs_files | grep '^\+ ' | sed 's/^\+ //g' > /tmp/NEW_FILES
@@ -45,6 +51,7 @@ cat /tmp/DEL_FILES | while read line; do
 done
 
 # Record CVS state
+find . -name CVS -exec touch '{}/Entries.Log' \;
 find . -name CVS -exec git add '{}/' \;
 
 # Commit to git (TODO read commit comments from CVS automagically?)
