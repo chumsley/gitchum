@@ -916,7 +916,7 @@
                (lambda (str)
                  (git-commit t)))))
 
-;;;; ----------------------------------- git-cvs-commit ----------------------------------
+;;;; ---------------------------------- git-cvs bridges ----------------------------------
 
 (defun git-cvs-commit ()
   "Calls out to cvs_commit.sh to push the current git state to CVS"
@@ -924,6 +924,13 @@
   (require 'compile)
   (let ((compilation-buffer-name-function (lambda (&rest dummy) "*git: cvs_commit*")))
     (compile "cvs_commit.sh" t)))
+
+(defun git-cvs-update ()
+  "Calls out to cvs_update.sh to pull the current CVS state to git"
+  (interactive)
+  (require 'compile)
+  (let ((compilation-buffer-name-function (lambda (&rest dummy) "*git: cvs_update*")))
+    (compile "cvs_update.sh" t)))
 
 ;;;; --------------------------------- git-query-manifest --------------------------------
 
