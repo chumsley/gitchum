@@ -8,9 +8,10 @@ if [ `pwd` = / ]; then
 fi
 
 # Don't try to commit from an out-of-date sandbox
-NEEDS_UPDATE=`cvs -n update | grep -v '^\?'`
+NEEDS_UPDATE=`cvs -n update | grep -v '^[?M]'`
 if [ "no$NEEDS_UPDATE" != "no" ]; then
-    echo Sandbox is out-of-date; update needed.
+    echo Sandbox is out-of-date\; update needed:
+    cvs -n update
     exit 1
 fi
 
@@ -20,16 +21,16 @@ git stash
 NEW_STASHES=`git stash list`
 
 # Update files list
+# We add files in git to CVS but not vice versa, because our personal
+# use-case involves uploading PDF files into CVS that we don't want to track
+# in git.  (So we don't want CVS to interpret that as the PDFs having been
+# deleted from git).  We might occasionally have to manually remove a file
+# from CVS, but that's not the end of the world.
 git ls-files | sort > /tmp/git_files
 find . -name CVS -exec cvs_entries.sh '{}' \; | sed 's/^\.\///g' | sort > /tmp/cvs_files
 diff --context=0 /tmp/cvs_files /tmp/git_files | grep '^\+ ' | sed 's/^\+ //g' > /tmp/NEW_FILES
-diff --context=0 /tmp/git_files /tmp/cvs_files | grep '^\+ ' | sed 's/^\+ //g' > /tmp/DEL_FILES
-
 cat /tmp/NEW_FILES | while read line; do
     cvs add "$line"
-done
-cat /tmp/DEL_FILES | while read line; do
-    cvs remove "$line"
 done
 
 # send the changes
