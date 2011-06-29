@@ -9,7 +9,7 @@ fi
 
 # Don't try to commit from an out-of-date sandbox
 NEEDS_UPDATE=`cvs -n update | grep -v '^\?'`
-if [ no$NEEDS_UPDATE != no ]; then
+if [ "no$NEEDS_UPDATE" != "no" ]; then
     echo Sandbox is out-of-date; update needed.
     exit 1
 fi
