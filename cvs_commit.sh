@@ -33,8 +33,14 @@ cat /tmp/NEW_FILES | while read line; do
     cvs add "$line"
 done
 
+# Generate log file
+git log last_cvs_commit.. | grep '^    \|^$\|^Date:' > /tmp/CVS_LOG_MESSAGE
+
 # send the changes
-cvs commit $*
+cvs commit -F /tmp/CVS_LOG_MESSAGE $*
+
+# Adjust the last-commit tag
+git tag -f last_cvs_commit
 
 # Restore working directory
 if [ "no$NEW_STASHES" != "no$CURRENT_STASHES" ]; then
