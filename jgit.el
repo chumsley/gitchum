@@ -1285,9 +1285,11 @@
   (interactive)
   (git-sync-command nil "init"))
 
-(defun git-add ()
-  (interactive)
-  (git-sync-command nil "add" (buffer-truename (current-buffer))))
+(defun git-add (&optional prefix)
+  (interactive "P")
+  (if prefix
+    (git-sync-command nil "add" "-f" (buffer-truename (current-buffer)))
+    (git-sync-command nil "add" (buffer-truename (current-buffer)))))
 
 (defun git-remove ()
   (interactive)
@@ -1296,7 +1298,7 @@
 ;;;; ====================================== git process interaction =====================================
 
 (defun git-sync-command (killable-buffer &rest args)
-  "Run git <args. synchronously.  Prints output as a message; kills KILLABLE-BUFFER on success if non-nil."
+  "Run `git ARGS` synchronously.  Prints output as a message; kills KILLABLE-BUFFER on success if non-nil."
   (let ((ret nil))
     (with-temp-buffer
       (setq ret (apply 'call-process "git" nil (list (current-buffer) t) nil args))

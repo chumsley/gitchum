@@ -8,7 +8,7 @@ if [ `pwd` = / ]; then
 fi
 
 # Don't try to commit from an out-of-date sandbox
-NEEDS_UPDATE=`cvs -n update | grep -v '^[?M]'`
+NEEDS_UPDATE=`cvs -n update | grep -v '^[?RAM]'`
 if [ "no$NEEDS_UPDATE" != "no" ]; then
     echo Sandbox is out-of-date\; update needed:
     cvs -n update
@@ -36,11 +36,8 @@ done
 # Generate log file
 git log last_cvs_commit.. | grep '^    \|^$\|^Date:' > /tmp/CVS_LOG_MESSAGE
 
-# send the changes
-cvs commit -F /tmp/CVS_LOG_MESSAGE $*
-
-# Adjust the last-commit tag
-git tag -f last_cvs_commit
+# send the changes and adjust the last-commit tag
+cvs commit -F /tmp/CVS_LOG_MESSAGE $* && git tag -f last_cvs_commit
 
 # Restore working directory
 if [ "no$NEW_STASHES" != "no$CURRENT_STASHES" ]; then
