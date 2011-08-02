@@ -5,6 +5,9 @@ if [ no$* = no -o $* = --help ]; then
     exit 1
 fi
 
+# create the CVS module if necessary
+ssh jrwright@begbie.cs.ubc.ca mkdir -p /ubc/cs/research/arrow/cvs/$1
+
 # get the files
 cvs checkout $1 || exit 1
 cd $1
@@ -28,4 +31,4 @@ else
     git rm dummy
     git commit -m "Removed dummy file" || exit 1
 fi
-
+git tag last_cvs_commit
