@@ -918,6 +918,7 @@
 
 ;;;; -------------------------------------- git-diff -------------------------------------
 
+;;TODO git-diff-mode, git color customization
 (defun git-diff (&optional same-window)
   "Shows the current state of the repository, according to the index."
   (interactive)
@@ -928,7 +929,8 @@
           (lines-left 0))
       (erase-buffer)
       (call-process "git" nil (current-buffer) nil "diff" "HEAD" "--color" "--color-words" "--" filename)
-      (ansi-color-apply-on-region (point-min) (point-max)))))
+      (ansi-color-apply-on-region (point-min) (point-max))
+      (goto-char (point-min)))))
 
 ;;;; ------------------------------------- git-ediff -------------------------------------
 
