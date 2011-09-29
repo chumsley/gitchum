@@ -161,8 +161,8 @@
     (define-key map [?a] 'git-add)
 ;    (define-key map [?b] 'git-blame)
 ;    (define-key map [?l] 'git-log)
-;    (define-key map [?=] 'git-diff)
-;    (define-key map [?-] 'git-ediff)
+    (define-key map [?=] 'git-diff)
+    (define-key map [?-] 'git-ediff)
 ;    (define-key map [??] 'git-describe-bindings)
 ;    (define-key map [?d] 'git-describe-patch)
 ;    (define-key map [?f] 'git-filelog)
@@ -915,6 +915,34 @@
     (git-hunks '("add" "--patch") plist-assoc
                (lambda (str)
                  (git-commit t)))))
+
+;;;; -------------------------------------- git-diff -------------------------------------
+
+(defun git-diff (&optional same-window)
+  "Shows the current state of the repository, according to the index."
+  (interactive)
+  (require 'ansi-color)
+  (let ((filename (buffer-file-name (current-buffer))))
+    (git-command-window 'diff same-window)
+    (let ((inhibit-read-only t)
+          (lines-left 0))
+      (erase-buffer)
+      (call-process "git" nil (current-buffer) nil "diff" "HEAD" "--color" "--color-words" "--" filename)
+      (ansi-color-apply-on-region (point-min) (point-max)))))
+
+;;;; ------------------------------------- git-ediff -------------------------------------
+
+(defun git-ediff ()
+  (interactive)
+  (require 'ediff)
+  (require 'vc)
+  (require 'vc-git)
+  (let ((filename (buffer-file-name (current-buffer))))
+    (vc-switch-backend filename 'git)
+    (ediff-load-version-control)
+    (funcall
+     (intern (format "ediff-%S-internal" ediff-version-control-package))
+     "" "" nil)))
 
 ;;;; ---------------------------------- git-cvs bridges ----------------------------------
 
