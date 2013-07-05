@@ -1381,7 +1381,6 @@
                  (set (make-local-variable 'git-responses) responses)
                  (set (make-local-variable 'git-hunks-scan-pos) (point-min))
                  (setq default-directory root-dir)
-                 (make-local-hook 'kill-buffer-hook)
                  (add-hook 'kill-buffer-hook 'kill-current-buffer-process nil t))
                (set-process-sentinel process 'git-hunks-sentinel)
                (set (make-local-variable 'git-hunks-thunk) thunk)
