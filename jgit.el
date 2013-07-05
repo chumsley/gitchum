@@ -614,7 +614,7 @@
         (s (git-hunk-beginning t))
         (e (point))
         (target nil)
-        (recenter-to (- (line-number) (line-number (window-start)))))
+        (recenter-to (- (line-number-at-pos) (line-number-at-pos (window-start)))))
     (when s
       (save-excursion
         (goto-char s)
@@ -1462,9 +1462,9 @@
 (defun git-maybe-recenter (&optional median-height)
   "Recenter if we are more than MEDIAN-HEIGHT lines from the top of the buffer"
   (setq median-height (or median-height (/ (window-body-height) 4)))
-  (let ((median-line (+ (line-number (window-start))
+  (let ((median-line (+ (line-number-at-pos (window-start))
                         median-height)))
-    (when (> (line-number) median-line)
+    (when (> (line-number-at-pos) median-line)
       (recenter median-height)))
   (point))
 
