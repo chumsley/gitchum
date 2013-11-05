@@ -192,7 +192,7 @@
     (define-key map [?K] 'git-prev-file)
     (define-key map [?a] 'git-expand-all-hunks)
     (define-key map [?z] 'git-collapse-all-hunks)
-    (define-key map [?q] 'darcs-quit-current)
+    (define-key map [?q] 'git-quit-current)
     map)
   "Keymap for displaying lists of atomic hunks")
 
@@ -759,7 +759,12 @@
 
 (defun git-hunk-excluded-p ()
   "Return exclusion overlay if the current hunk is excluded, or NIL otherwise."
-  (overlay-at (point) 'git-hunk-excluded))
+  (let ((os (overlays-at (point)))
+        (ret nil))
+    (while (and os
+                (not (overlay-get (car os) 'git-hunk-excluded)))
+      (setq os (cdr os)))
+    (car os)))
 
 (defun git-exclude-hunk (&optional next-hunk)
   "Exclude the current hunk. Advances to the next hunk if called interactively or if NEXT-HUNK is non-NIL."
@@ -988,7 +993,7 @@
 (defvar git-manifest-map
   (let ((map (make-sparse-keymap)))
     (define-key map [?\r] 'git-goto-manifest-file)
-    (define-key map [?q] 'darcs-quit-current)
+    (define-key map [?q] 'git-quit-current)
     map))
 
 (defun git-manifest-mode ()
@@ -1078,7 +1083,7 @@
     (define-key map [?n] 'git-next-file)
     (define-key map [?p] 'git-prev-file)
     (define-key map [(control ?c) (control ?c)] 'git-commit-from-status)
-    (define-key map [(control ?c) (control ?s)] 'darcs-quit-current)
+    (define-key map [(control ?c) (control ?s)] 'git-quit-current)
     map))
 
 (defun git-status-mode ()
@@ -1283,7 +1288,7 @@
 
 (defun git-commit-message ()
   "Return the commit message from the current buffer"
-  (darcs-trim-newlines
+  (git-trim-newlines
    (buffer-substring (overlay-start git-commit-msg-overlay)
                      (overlay-end git-commit-msg-overlay))))
 
@@ -1392,9 +1397,9 @@
              (buffer-substring (point-min) (point-max)))))
     (if (and (string-match "^exited abnormally" string)
              (process-buffer proc))
-      (message "%s\n%s: %s" (darcs-trim-newlines (bufstr))
+      (message "%s\n%s: %s" (git-trim-newlines (bufstr))
                (process-name proc)
-               (darcs-trim-newlines string))
+               (git-trim-newlines string))
       (when (and (not (eq 'run (process-status proc)))
                  (buffer-live-p (process-buffer proc)))
         (if git-hunks-thunk
@@ -1468,10 +1473,34 @@
       (recenter median-height)))
   (point))
 
-;; kill-current-buffer-process
-;; one-line-buffer
-;; darcs-quit-current
-;; darcs-trim-newlines
+(defun git-trim-newlines (text)
+  "Trims leading and trailing newlines from TEXT"
+  ;; TODO The flagrant inefficiency of this function makes baby Jesus cry.
+  (while (and (> (length text) 0)
+              (eq ?\n (aref text 0)))
+    (setq text (substring text 1)))
+  (while (and (> (length text) 0)
+              (eq ?\n (aref text (- (length text) 1))))
+    (setq text (substring text 0 (- (length text) 1))))
+  text)
+
+(defun git-quit-current ()
+  "Hide the current buffer"
+  (interactive)
+  (if (one-window-p)
+    (bury-buffer)
+    (bury-buffer)
+    (delete-window)))
+
+(defun kill-current-buffer-process ()
+  "Kill the process associated with the current buffer.  This is intended to be added to
+  `kill-buffer-hook'"
+  (let ((proc (get-buffer-process (current-buffer))))
+    (when proc
+      (kill-process proc))))
+
+(defun one-line-buffer ()
+  (replace-regexp-in-string "\n" " " (buffer-substring (point-min) (point-max))))
 
 (provide 'jgit)
 ;;; jgit.el ends here
