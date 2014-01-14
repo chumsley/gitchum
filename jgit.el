@@ -1323,12 +1323,12 @@
 (defun git-add (&optional prefix)
   (interactive "P")
   (if prefix
-    (git-sync-command nil "add" "-f" (buffer-truename (current-buffer)))
-    (git-sync-command nil "add" (buffer-truename (current-buffer)))))
+    (git-sync-command nil "add" "-f" buffer-file-truename)
+    (git-sync-command nil "add" buffer-file-truename)))
 
 (defun git-remove ()
   (interactive)
-  (git-sync-command nil "rm" (buffer-truename (current-buffer))))
+  (git-sync-command nil "rm" buffer-file-truename))
 
 ;;;; ====================================== git process interaction =====================================
 
@@ -1503,4 +1503,4 @@
   (replace-regexp-in-string "\n" " " (buffer-substring (point-min) (point-max))))
 
 (provide 'jgit)
-;;; jgit.el ends here
+
