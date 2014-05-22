@@ -1269,8 +1269,51 @@ allows some or all of the changes to be staged and/or committed."
   (let ((map (make-sparse-keymap)))
     (define-key map [(control ?c) (control ?c)] 'server-edit)
     map)
-  "Only thing that's different about the commit map is that is has a `C-c C-c' binding")
+  "Add a `C-c C-c' binding.")
 
+(defvar git-commit-plumbing-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [(control ?c) (control ?c)] 'git-commit-plumbing-execute)
+    map)
+  "The `C-c C-c' binding points to `git-commit-plumbing-execute' instead of `server-edit'.")
+
+(defvar git-commit-buffer-instructions
+  "
+# Please enter the commit message for your changes.
+# (Comment lines starting with '#' will not be included)
+#\\<git-commit-plumbing-map>
+# Type \\[git-commit-plumbing-execute] to commit the staged changes.
+# Type \\[kill-buffer] to abandon this commit buffer.
+#
+# The current status is listed below.
+#
+")
+
+(defun git-commit-plumbing (&optional same-window msg)
+  "Commit the currently staged patches."
+  (interactive)
+  (git-command-window 'commit same-window)
+  (toggle-read-only 0)
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (insert (substitute-command-keys git-commit-buffer-instructions))
+    ;;TODO (call-process "git" nil (current-buffer) nil "status" "--untracked-files=no")
+    ;; need to be able to add comment lines
+    (call-process "git" nil (current-buffer) nil "diff" "--cached")
+    (goto-char (point-min)))
+  (git-commit-msg-mode)
+  (use-local-map git-commit-plumbing-map))
+
+(defun git-commit-plumbing-execute ()
+  "Commit the currently-staged patches using a message from the current commit buffer."
+  (interactive)
+  (message "git commit")
+  (git-sync-command (current-buffer) "commit" "-m" (git-commit-message))
+  ;; If we return to a whatsnew or status window, refresh it
+  (when (eq major-mode 'git-whatsnew-plumbing)
+    (revert-buffer t t t)))
+  
+  
 
 ;;;; ------------------------------------- git-commit ------------------------------------
 
