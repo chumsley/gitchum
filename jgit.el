@@ -1253,6 +1253,34 @@ allows some or all of the changes to be staged and/or committed."
   (interactive)
   (git-commit t))
 
+
+;;;; -------------------------------- git-plumbing-commit --------------------------------
+
+(defun git-commit-msg-mode ()
+  "Major mode for editing git commit messages."
+  (unless (eq major-mode 'git-commit-msg)
+    (kill-all-local-variables))
+  (setq font-lock-defaults '((diff-font-lock-keywords) t))
+  (setq major-mode 'git-commit-msg)
+  (setq mode-name "git-commit-msg")
+  (use-local-map git-commit-msg-map)
+  (turn-on-font-lock)
+
+  ;; Set up the message overlay
+  (unless git-commit-msg-overlay
+    (set (make-local-variable 'git-commit-msg-overlay)
+         (make-overlay (point-min) (point) nil nil t)))
+  (move-overlay git-commit-msg-overlay (point-min) (point))
+  (overlay-put git-commit-msg-overlay 'face 'git-commit-msg))
+
+
+(defvar git-commit-msg-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [(control ?c) (control ?c)] 'server-edit)
+    map)
+  "Only thing that's different about the commit map is that is has a `C-c C-c' binding")
+
+
 ;;;; ------------------------------------- git-commit ------------------------------------
 
 (defvar git-commit-map
