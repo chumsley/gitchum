@@ -1,4 +1,4 @@
-;;; jgit.el --- xgit-like git integration for emacs
+;;; jgit.el --- xdarcs-like git integration for emacs
 
 ;; Copyright (C) 2010 James Wright
 
