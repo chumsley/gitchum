@@ -175,8 +175,6 @@
     (define-key map [?W] 'git-whatsnew-plumbing)
     ;(define-key map [?c] 'git-commit)
     (define-key map [?x] 'git-remove)
-    (define-key map [?C] 'git-cvs-commit)
-    (define-key map [?U] 'git-cvs-update)
     map)
   "The prefix for git commands")
 
@@ -1002,22 +1000,6 @@ allows some or all of the changes to be staged and/or committed."
     (funcall
      (intern (format "ediff-%S-internal" ediff-version-control-package))
      "" "" nil)))
-
-;;;; ---------------------------------- git-cvs bridges ----------------------------------
-
-(defun git-cvs-commit ()
-  "Calls out to cvs_commit.sh to push the current git state to CVS"
-  (interactive)
-  (require 'compile)
-  (let ((compilation-buffer-name-function (lambda (&rest dummy) "*git: cvs_commit*")))
-    (compile "cvs_commit.sh" t)))
-
-(defun git-cvs-update ()
-  "Calls out to cvs_update.sh to pull the current CVS state to git"
-  (interactive)
-  (require 'compile)
-  (let ((compilation-buffer-name-function (lambda (&rest dummy) "*git: cvs_update*")))
-    (compile "cvs_update.sh" t)))
 
 ;;;; --------------------------------- git-query-manifest --------------------------------
 
