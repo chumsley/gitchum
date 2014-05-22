@@ -281,7 +281,7 @@ allows some or all of the changes to be staged and/or committed."
   (let ((inhibit-read-only t))
     (git-command-window 'diff same-window)
     (erase-buffer)
-    (call-process "git" nil (current-buffer) nil "diff" "HEAD"))
+    (call-process "git" nil (current-buffer) nil "diff"))
   (git-whatsnew-plumbing-mode)
   (goto-char (point-min)))
   
