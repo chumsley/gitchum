@@ -1254,7 +1254,9 @@ allows some or all of the changes to be staged and/or committed."
   (git-commit t))
 
 
-;;;; -------------------------------- git-plumbing-commit --------------------------------
+;;;; -------------------------------- git-commit-msg-mode --------------------------------
+
+(defvar git-commit-msg-overlay nil)
 
 (defun git-commit-msg-mode ()
   "Major mode for editing git commit messages."
@@ -1265,6 +1267,13 @@ allows some or all of the changes to be staged and/or committed."
   (setq mode-name "git-commit-msg")
   (use-local-map git-commit-msg-map)
   (turn-on-font-lock)
+
+  ;; Protect the boilerplate
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward "^#" nil t)
+      (goto-char (point-at-bol))
+      (put-text-property (point) (point-max) 'read-only t)))
 
   ;; Set up the message overlay
   (unless git-commit-msg-overlay
@@ -1321,8 +1330,6 @@ allows some or all of the changes to be staged and/or committed."
          (git-commit t (git-commit-message))))
   (setq selective-display t)
   (turn-on-font-lock))
-
-(defvar git-commit-msg-overlay nil)
 
 (defun git-commit (&optional same-window msg)
   "Commit the currently staged patches."
