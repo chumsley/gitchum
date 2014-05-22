@@ -1435,8 +1435,8 @@ allows some or all of the changes to be staged and/or committed."
 (defun git-add (&optional prefix)
   (interactive "P")
   (if prefix
-    (git-sync-command nil "add" "-f" buffer-file-truename)
-    (git-sync-command nil "add" buffer-file-truename)))
+    (git-sync-command nil "add" "-f" (file-truename (buffer-file-name)))
+    (git-sync-command nil "add" (file-truename (buffer-file-name)))))
 
 (defun git-remove ()
   (interactive)
