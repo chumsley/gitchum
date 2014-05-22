@@ -172,6 +172,7 @@
     (define-key map [?m] 'git-query-manifest)
     (define-key map [?s] 'git-status)
     (define-key map [?w] 'git-whatsnew)
+    (define-key map [?W] 'git-whatsnew-plumbing)
     ;(define-key map [?c] 'git-commit)
     (define-key map [?x] 'git-remove)
     (define-key map [?C] 'git-cvs-commit)
@@ -220,9 +221,11 @@
 
 (defun git-command-window (name same-window)
   "Switch to a readonly git command window with the
-  default-directory set to the repo root.  Contents are erased,
-  but local variables might be leftover from previous instances."
-  (let ((repo-dir (let ((dir (file-name-directory (expand-file-name (or (buffer-file-name (current-buffer)) default-directory))))
+  default-directory set to the repo root.  Contents and local
+  variables might be leftover from previous
+  instances."
+  (let ((repo-dir (let ((dir (file-name-directory (expand-file-name (or (buffer-file-name (current-buffer))
+                                                                        default-directory))))
                         (olddir "/"))
                     (while (and (not (equal dir olddir))
                                 (not (file-directory-p (concat dir "/.git"))))
@@ -235,6 +238,55 @@
     (toggle-read-only 1)
     (setq default-directory repo-dir)))
 
+(defvar git-whatsnew-plumbing-map
+  (let ((map (make-sparse-keymap 'git-whatsnew-plumbing-map)))
+    (define-key map [(control ?c) (control ?s)] 'git-stage-from-whatsnew-plumbing)
+    (define-key map [(control ?c) (control ?c)] 'git-commit-from-whatsnew-plumbing)
+    (define-key map [(control ?c) (control ?r)] 'git-revert-from-whatsnew-plumbing)
+    (define-key map [(control ?x) ?#] 'git-commit-from-whatsnew-plumbing)
+
+    (define-key map [?j] 'diff-hunk-next)
+    (define-key map [?k] 'diff-hunk-prev)
+    (define-key map [?f] 'diff-file-next)
+    (define-key map [?J] 'diff-file-next)
+    (define-key map [?K] 'diff-file-prev)
+
+    (define-key map [?s] 'diff-split-hunk)
+    (define-key map [?d] 'diff-hunk-kill)
+
+    (define-key map [remap undo] 'diff-undo)
+    (define-key map [remap undo-tree-undo] 'diff-undo)
+    (define-key map [remap self-insert] 'undefined)
+
+    (define-key map [?q] 'git-quit-current)
+    map)
+  "Keymap for git-whatsnew-mode")
+
+(defun git-whatsnew-plumbing-mode ()
+  (unless (eq major-mode 'git-whatsnew-plumbing)
+    ;; Don't kill locals if we're already in whatsnew-mode
+    (kill-all-local-variables))
+  (diff-mode)
+  (setq major-mode 'git-whatsnew-plumbing)
+  (setq mode-name "git-whatsnew-plumbing")
+  (use-local-map git-whatsnew-plumbing-map)
+;;TODO  (set (make-local-variable 'revert-buffer-function)
+  (setq buffer-read-only t)
+  (setq minor-mode-overriding-map-alist
+        (delq (assoc 'buffer-read-only minor-mode-overriding-map-alist)
+              minor-mode-overriding-map-alist)))
+
+(defun git-whatsnew-plumbing (&optional same-window)
+  "Prints a list of all the changes in the current repo, and
+allows some or all of the changes to be staged and/or committed."
+  (interactive)
+  (let ((inhibit-read-only t))
+    (git-command-window 'diff same-window)
+    (erase-buffer)
+    (call-process "git" nil (current-buffer) nil "diff" "HEAD"))
+  (git-whatsnew-plumbing-mode)
+  (goto-char (point-min)))
+  
 ;;;; ------------------------------------ git-whatsnew -----------------------------------
 
 (defvar git-display-state nil
