@@ -1274,8 +1274,11 @@ allows some or all of the changes to be staged and/or committed."
 (defvar git-commit-plumbing-map
   (let ((map (make-sparse-keymap)))
     (define-key map [(control ?c) (control ?c)] 'git-commit-plumbing-execute)
+    (define-key map [remap server-edit] 'git-commit-plumbing-execute)    
     map)
-  "The `C-c C-c' binding points to `git-commit-plumbing-execute' instead of `server-edit'.")
+  "The `C-c C-c' binding points to `git-commit-plumbing-execute'
+  instead of `server-edit', and all other `server-edit' bindings
+  are also replaced.")
 
 (defvar git-commit-buffer-instructions
   "
