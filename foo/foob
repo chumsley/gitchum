@@ -1,5 +1,6 @@
 Topline.
 A line above.
+Mid line.
 Some stuff.
 A line below.
 Bottom line.
@@ -14,8 +15,8 @@ Bottom line.
 
 
 
-
-
+Some text on a previously blank line.
+This change is not in the index.
 
 
 
@@ -33,4 +34,3 @@ Bottom line.
 
 
 Oh hi, I didn't see you there.
-
