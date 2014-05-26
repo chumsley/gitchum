@@ -302,6 +302,16 @@ allows some or all of the changes to be staged and/or committed."
     (if (zerop (git-sync-command (current-buffer) "apply" "--cached" patchfile))
       (delete-file patchfile))))
 
+(defun git-revert-from-whatsnew-plumbing ()
+  "Revert the changes in the current buffer in the working tree."
+  (interactive)
+  (when (yes-or-no-p "Do you really want to revert these changes? ")
+    (let ((patchfile (make-temp-file "jgit-patch.diff.")))
+      (write-region nil nil patchfile)
+      (if (zerop (git-sync-command (current-buffer) "apply" "--reverse" patchfile))
+        (delete-file patchfile)))
+    (git-whatsnew-plumbing t)))
+
 (defun git-commit-from-whatsnew-plumbing ()
   "Apply the changes in the current whatsnew window to the index
   and open a commit dialogue buffer."
