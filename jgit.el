@@ -268,8 +268,8 @@
 (defun git-whatsnew-plumbing-mode ()
   (unless (eq major-mode 'git-whatsnew-plumbing)
     ;; Don't kill locals if we're already in whatsnew-mode
-    (kill-all-local-variables))
-  (diff-mode)
+    (kill-all-local-variables)
+    (diff-mode))
   (setq major-mode 'git-whatsnew-plumbing)
   (setq mode-name "git-whatsnew-plumbing")
   (use-local-map git-whatsnew-plumbing-map)
