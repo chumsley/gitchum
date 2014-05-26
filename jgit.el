@@ -247,12 +247,15 @@
 
     (define-key map [?j] 'diff-hunk-next)
     (define-key map [?k] 'diff-hunk-prev)
+    (define-key map [?n] 'diff-hunk-next)
+    (define-key map [?p] 'diff-hunk-prev)
     (define-key map [?f] 'diff-file-next)
     (define-key map [?J] 'diff-file-next)
     (define-key map [?K] 'diff-file-prev)
 
     (define-key map [?s] 'diff-split-hunk)
     (define-key map [?d] 'diff-hunk-kill)
+    (define-key map [?D] 'diff-file-kill)
 
     (define-key map [remap undo] 'diff-undo)
     (define-key map [remap undo-tree-undo] 'diff-undo)
@@ -270,7 +273,9 @@
   (setq major-mode 'git-whatsnew-plumbing)
   (setq mode-name "git-whatsnew-plumbing")
   (use-local-map git-whatsnew-plumbing-map)
-;;TODO  (set (make-local-variable 'revert-buffer-function)
+  (set (make-local-variable 'revert-buffer-function)
+       (lambda (ignore-auto noconfirm)
+         (git-whatsnew-plumbing t)))
   (setq buffer-read-only t)
   (setq minor-mode-overriding-map-alist
         (delq (assoc 'buffer-read-only minor-mode-overriding-map-alist)
@@ -303,7 +308,12 @@ allows some or all of the changes to be staged and/or committed."
   (interactive)
   (git-apply-buffer-diff)
   (git-commit-plumbing t))
-         
+
+(defun git-stage-from-whatsnew-plumbing ()
+  "Apply the changes in the current whatsnew window to the index and refresh."
+  (interactive)
+  (git-apply-buffer-diff)
+  (git-whatsnew-plumbing t))
   
 ;;;; ------------------------------------ git-whatsnew -----------------------------------
 
