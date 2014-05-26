@@ -236,6 +236,8 @@
     (toggle-read-only 1)
     (setq default-directory repo-dir)))
 
+;;;; ------------------------------- git-whatsnew-plumbing -------------------------------
+
 (defvar git-whatsnew-plumbing-map
   (let ((map (make-sparse-keymap 'git-whatsnew-plumbing-map)))
     (define-key map [(control ?c) (control ?s)] 'git-stage-from-whatsnew-plumbing)
@@ -283,7 +285,25 @@ allows some or all of the changes to be staged and/or committed."
     (erase-buffer)
     (call-process "git" nil (current-buffer) nil "diff"))
   (git-whatsnew-plumbing-mode)
+  (if (= (point-min) (point-max))
+    (let ((inhibit-read-only t))
+      (insert "No changes.")))
   (goto-char (point-min)))
+
+(defun git-apply-buffer-diff ()
+  "Apply the changes in the current buffer to the index."
+  (let ((patchfile (make-temp-file "jgit-patch.diff.")))
+    (write-region nil nil patchfile)
+    (if (zerop (git-sync-command (current-buffer) "apply" "--cached" patchfile))
+      (delete-file patchfile))))
+
+(defun git-commit-from-whatsnew-plumbing ()
+  "Apply the changes in the current whatsnew window to the index
+  and open a commit dialogue buffer."
+  (interactive)
+  (git-apply-buffer-diff)
+  (git-commit-plumbing t))
+         
   
 ;;;; ------------------------------------ git-whatsnew -----------------------------------
 
