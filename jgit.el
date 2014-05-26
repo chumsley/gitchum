@@ -88,7 +88,6 @@
                       (setq olddir dir
                             dir (file-name-directory (directory-file-name dir))))
                     (and (not (equal dir olddir)) dir))))
-    (message "git-command-window %s %s" name same-window) ;TEST
     (if same-window
       (switch-to-buffer (format "*git %s: (%s)*" name repo-dir))
       (switch-to-buffer-other-window (format "*git %s: (%s)*" name repo-dir)))
@@ -158,7 +157,7 @@ allows some or all of the changes to be staged and/or committed."
   "Apply the changes in the current buffer to the index."
   (let ((patchfile (make-temp-file "jgit-patch.diff.")))
     (write-region nil nil patchfile)
-    (if (zerop (git-sync-command (current-buffer) "apply" "--cached" patchfile))
+    (if (zerop (git-sync-command nil "apply" "--cached" patchfile))
       (delete-file patchfile))))
 
 (defun git-revert-from-whatsnew ()
@@ -167,7 +166,7 @@ allows some or all of the changes to be staged and/or committed."
   (when (yes-or-no-p "Do you really want to revert these changes? ")
     (let ((patchfile (make-temp-file "jgit-patch.diff.")))
       (write-region nil nil patchfile)
-      (if (zerop (git-sync-command (current-buffer) "apply" "--reverse" patchfile))
+      (if (zerop (git-sync-command nil "apply" "--reverse" patchfile))
         (delete-file patchfile)))
     (git-whatsnew t)))
 
