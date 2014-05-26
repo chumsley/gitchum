@@ -103,6 +103,9 @@
     (define-key map [(control ?c) (control ?r)] 'git-revert-from-whatsnew)
     (define-key map [(control ?x) ?#] 'git-commit-from-whatsnew)
 
+    (define-key map [?g] 'diff-goto-source)
+    (define-key map [(control return)] 'diff-goto-source)
+    
     (define-key map [?j] 'diff-hunk-next)
     (define-key map [?k] 'diff-hunk-prev)
     (define-key map [?n] 'diff-hunk-next)
