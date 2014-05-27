@@ -26,10 +26,10 @@
 ;;; Commentary:
 ;;
 ;; Still TODO
-;; - macro to factor out common navigation code?  (just takes navigation-body and error)
-;; - Cherrypicking from commit/status?
-;; - empty new files and empty repos are not handled well
-
+;; - git-log and git-filelog
+;;   Don't know yet what this should look like exactly; I usually want to describe a patch and/or diff against it
+;; - git-amend
+;; - git-blame?  (I don't know if I really care about this or not)
 ;;; Code:
 
 ;;;; =============================================== Faces ==============================================
@@ -65,6 +65,7 @@
     (define-key map [?i] 'git-init)
     (define-key map [?m] 'git-query-manifest)
     (define-key map [?w] 'git-whatsnew)
+    (define-key map [?s] 'git-staged)
     (define-key map [?c] 'git-commit)
     (define-key map [?x] 'git-remove)
     map)
@@ -96,13 +97,8 @@
 
 ;;;; ------------------------------- git-whatsnew -------------------------------
 
-(defvar git-whatsnew-map
-  (let ((map (make-sparse-keymap 'git-whatsnew-map)))
-    (define-key map [(control ?c) (control ?s)] 'git-stage-from-whatsnew)
-    (define-key map [(control ?c) (control ?c)] 'git-commit-from-whatsnew)
-    (define-key map [(control ?c) (control ?r)] 'git-revert-from-whatsnew)
-    (define-key map [(control ?x) ?#] 'git-commit-from-whatsnew)
-
+(defvar git-diff-map
+  (let ((map (make-sparse-keymap 'git-diff-map)))
     (define-key map [?g] 'diff-goto-source)
     (define-key map [(control return)] 'diff-goto-source)
     
@@ -123,6 +119,17 @@
     (define-key map [remap self-insert] 'undefined)
 
     (define-key map [?q] 'git-quit-current)
+    map)
+  "Keymap for navigating diff buffers")
+
+
+(defvar git-whatsnew-map
+  (let ((map (make-sparse-keymap 'git-whatsnew-map)))
+    (set-keymap-parent map git-diff-map)
+    (define-key map [(control ?c) (control ?s)] 'git-stage-from-whatsnew)
+    (define-key map [(control ?c) (control ?c)] 'git-commit-from-whatsnew)
+    (define-key map [(control ?c) (control ?r)] 'git-revert-from-whatsnew)
+    (define-key map [(control ?x) ?#] 'git-commit-from-whatsnew)
     map)
   "Keymap for git-whatsnew-mode")
 
@@ -156,35 +163,80 @@ allows some or all of the changes to be staged and/or committed."
       (insert "No changes.")))
   (goto-char (point-min)))
 
-(defun git-apply-buffer-diff ()
-  "Apply the changes in the current buffer to the index."
+(defun git-apply-buffer-diff (&rest options)
+  "Call git apply on the current buffer's diff with OPTIONS."
   (let ((patchfile (make-temp-file "jgit-patch.diff.")))
     (write-region nil nil patchfile)
-    (if (zerop (git-sync-command nil "apply" "--cached" patchfile))
+    (if (zerop (apply 'git-sync-command nil "apply" (append options (list patchfile))))
       (delete-file patchfile))))
 
 (defun git-revert-from-whatsnew ()
   "Revert the changes in the current buffer in the working tree."
   (interactive)
   (when (yes-or-no-p "Do you really want to revert these changes? ")
-    (let ((patchfile (make-temp-file "jgit-patch.diff.")))
-      (write-region nil nil patchfile)
-      (if (zerop (git-sync-command nil "apply" "--reverse" patchfile))
-        (delete-file patchfile)))
+    (git-apply-buffer-diff "--reverse")
     (git-whatsnew t)))
 
 (defun git-commit-from-whatsnew ()
   "Apply the changes in the current whatsnew window to the index
   and open a commit dialogue buffer."
   (interactive)
-  (git-apply-buffer-diff)
+  (git-apply-buffer-diff "--cached")
   (git-commit t))
 
 (defun git-stage-from-whatsnew ()
   "Apply the changes in the current whatsnew window to the index and refresh."
   (interactive)
-  (git-apply-buffer-diff)
+  (git-apply-buffer-diff "--cached")
   (git-whatsnew t))
+
+;;;; ------------------------------------- git-staged ------------------------------------
+
+(defvar git-staged-map
+  (let ((map (make-sparse-keymap 'git-staged-map)))
+    (set-keymap-parent map git-diff-map)
+    (define-key map [(control ?c) (control ?c)] 'git-commit-from-staged)
+    (define-key map [(control ?c) (control ?r)] 'git-unstage)
+    (define-key map [(control ?c) (control ?u)] 'git-unstage)
+    (define-key map [(control ?x) ?#] 'git-commit-from-staged)
+    map)
+  "Keymap for git-staged-mode")
+
+(defun git-staged-mode ()
+  (unless (eq major-mode 'git-staged)
+    ;; Don't kill locals if we're already in status-mode
+    (kill-all-local-variables)
+    (diff-mode))
+  (setq major-mode 'git-staged)
+  (setq mode-name "git-staged")
+  (use-local-map git-staged-map)
+  (set (make-local-variable 'revert-buffer-function)
+       (lambda (ignore-auto noconfirm)
+         (git-staged t)))
+  (setq buffer-read-only t)
+  (setq minor-mode-overriding-map-alist
+        (delq (assoc 'buffer-read-only minor-mode-overriding-map-alist)
+              minor-mode-overriding-map-alist)))
+
+(defun git-staged (&optional same-window)
+  "Prints a list of all the currently staged changes in the current repo, and
+allows some or all of the changes to be committed and/or reverted."
+  (interactive)
+  (let ((inhibit-read-only t))
+    (git-command-window 'staged same-window)
+    (erase-buffer)
+    (call-process "git" nil (current-buffer) nil "diff" "--cached"))
+  (git-staged-mode)
+  (if (= (point-min) (point-max))
+    (let ((inhibit-read-only t))
+      (insert "No changes.")))
+  (goto-char (point-min)))
+
+(defun git-unstage ()
+  "Remove the changes in the current buffer from the index."
+  (interactive)
+  (git-apply-buffer-diff "--cached" "--reverse")
+  (git-staged t))
 
 ;;;; -------------------------------------- git-diff -------------------------------------
 
