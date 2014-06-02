@@ -433,7 +433,7 @@ allows some or all of the changes to be committed and/or reverted."
     (git-sync-command (current-buffer) "commit" "--amend" "-m" (git-commit-message))
     (git-sync-command (current-buffer) "commit" "-m" (git-commit-message)))
   ;; If we return to a whatsnew or status window, refresh it
-  (when (eq major-mode 'git-whatsnew)
+  (when (find major-mode '(git-whatsnew git-staged))
     (revert-buffer t t t)))
 
 (defun git-commit-message ()
