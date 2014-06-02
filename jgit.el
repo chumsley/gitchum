@@ -126,6 +126,7 @@
 (defvar git-whatsnew-map
   (let ((map (make-sparse-keymap 'git-whatsnew-map)))
     (set-keymap-parent map git-diff-map)
+    (define-key map [(control ?c) (control ?a)] 'git-amend-from-whatsnew)
     (define-key map [(control ?c) (control ?s)] 'git-stage-from-whatsnew)
     (define-key map [(control ?c) (control ?c)] 'git-commit-from-whatsnew)
     (define-key map [(control ?c) (control ?r)] 'git-revert-from-whatsnew)
@@ -184,6 +185,13 @@ allows some or all of the changes to be staged and/or committed."
   (git-apply-buffer-diff "--cached")
   (git-commit t))
 
+(defun git-amend-from-whatsnew ()
+  "Apply the changes in the current whatsnew window to the most
+  recent commit."
+  (interactive)
+  (git-apply-buffer-diff "--cached")
+  (git-commit t t))
+
 (defun git-stage-from-whatsnew ()
   "Apply the changes in the current whatsnew window to the index and refresh."
   (interactive)
@@ -195,6 +203,7 @@ allows some or all of the changes to be staged and/or committed."
 (defvar git-staged-map
   (let ((map (make-sparse-keymap 'git-staged-map)))
     (set-keymap-parent map git-diff-map)
+    (define-key map [(control ?c) (control ?a)] 'git-amend-from-staged)
     (define-key map [(control ?c) (control ?c)] 'git-commit-from-staged)
     (define-key map [(control ?c) (control ?r)] 'git-unstage)
     (define-key map [(control ?c) (control ?u)] 'git-unstage)
@@ -237,6 +246,14 @@ allows some or all of the changes to be committed and/or reverted."
   (interactive)
   (git-apply-buffer-diff "--cached" "--reverse")
   (git-staged t))
+
+(defun git-commit-from-staged ()
+  (interactive)
+  (git-commit t))
+
+(defun git-amend-from-staged ()
+  (interactive)
+  (git-commit t t))
 
 ;;;; -------------------------------------- git-diff -------------------------------------
 
@@ -322,6 +339,7 @@ allows some or all of the changes to be committed and/or reverted."
 ;;;; -------------------------------- git-commit-msg-mode --------------------------------
 
 (defvar git-commit-msg-overlay nil)
+(defvar git-commit-amend-p nil)
 
 (defun git-commit-msg-mode ()
   "Major mode for editing git commit messages."
@@ -331,6 +349,7 @@ allows some or all of the changes to be committed and/or reverted."
   (setq major-mode 'git-commit-msg)
   (setq mode-name "git-commit-msg")
   (use-local-map git-commit-msg-map)
+  (set (make-local-variable 'git-commit-amend-p) nil)
   (turn-on-font-lock)
 
   ;; Protect the boilerplate
@@ -338,14 +357,14 @@ allows some or all of the changes to be committed and/or reverted."
     (goto-char (point-min))
     (when (re-search-forward "^#" nil t)
       (goto-char (point-at-bol))
-      (put-text-property (point) (point-max) 'read-only t)))
+      (put-text-property (point) (point-max) 'read-only t))
 
   ;; Set up the message overlay
-  (unless git-commit-msg-overlay
-    (set (make-local-variable 'git-commit-msg-overlay)
-         (make-overlay (point-min) (point) nil nil t)))
-  (move-overlay git-commit-msg-overlay (point-min) (point))
-  (overlay-put git-commit-msg-overlay 'face 'git-commit-msg))
+    (unless git-commit-msg-overlay
+      (set (make-local-variable 'git-commit-msg-overlay)
+           (make-overlay (point-min) (point) nil nil t)))
+    (move-overlay git-commit-msg-overlay (point-min) (point))
+    (overlay-put git-commit-msg-overlay 'face 'git-commit-msg)))
 
 
 (defvar git-commit-msg-map
@@ -375,26 +394,44 @@ allows some or all of the changes to be committed and/or reverted."
 #
 ")
 
-(defun git-commit (&optional same-window msg)
+(defun git-commit-insert-instructions (amendp)
+  "Insert a message template for the next commit."
+  (let ((p nil))
+    (if amendp
+      (progn
+        (call-process "git" nil (current-buffer) nil "show" "--format=%B" "--quiet")
+        (insert (substitute-command-keys git-commit-buffer-instructions))
+        (setq p (point))
+        (call-process "git" nil (current-buffer) nil "commit" "--dry-run" "--amend" "--verbose"))
+      (insert (substitute-command-keys git-commit-buffer-instructions))
+      (setq p (point))
+      (call-process "git" nil (current-buffer) nil "commit" "--dry-run" "--verbose"))
+    (goto-char p)
+    (when (re-search-forward "^diff --git" nil t)
+      (goto-char (point-at-bol))
+      (forward-line -1)
+      (string-rectangle p (point) "# "))))
+
+(defun git-commit (&optional same-window amendp msg)
   "Commit the currently staged patches."
   (interactive)
   (git-command-window 'commit same-window)
   (toggle-read-only 0)
   (let ((inhibit-read-only t))
     (erase-buffer)
-    (insert (substitute-command-keys git-commit-buffer-instructions))
-    ;;TODO (call-process "git" nil (current-buffer) nil "status" "--untracked-files=no")
-    ;; need to be able to add comment lines
-    (call-process "git" nil (current-buffer) nil "diff" "--cached")
+    (git-commit-insert-instructions amendp)
     (goto-char (point-min)))
   (git-commit-msg-mode)
-  (use-local-map git-commit-map))
+  (use-local-map git-commit-map)
+  (setq git-commit-amend-p amendp))
 
 (defun git-commit-execute ()
   "Commit the currently-staged patches using a message from the current commit buffer."
   (interactive)
   (message "git commit")
-  (git-sync-command (current-buffer) "commit" "-m" (git-commit-message))
+  (if git-commit-amend-p
+    (git-sync-command (current-buffer) "commit" "--amend" "-m" (git-commit-message))
+    (git-sync-command (current-buffer) "commit" "-m" (git-commit-message)))
   ;; If we return to a whatsnew or status window, refresh it
   (when (eq major-mode 'git-whatsnew)
     (revert-buffer t t t)))
