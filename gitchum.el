@@ -1,6 +1,6 @@
-;;; gitchum.el --- xdarcs-like git integration for emacs
+;;; gitchum.el --- A set of commands for managing git repositories from emacs.
 
-;; Copyright (C) 2010 James Wright
+;; Copyright (C) 2010,2014 James Wright
 
 ;; Author: James Wright <james@chumsley.org>
 ;; Created: 28 Apr 2010
@@ -25,11 +25,48 @@
 
 ;;; Commentary:
 ;;
+;; Gitchum is a set of commands for managing git repositories from emacs.
+;;
+;; It focuses on managing the staging area and working tree at the
+;; level of patches. It is intended to be a replacement/extension of
+;; the command line cherry picking interface.
+
+;; To get started, load `gitchum.el`.  Visit a file in a git
+;; repository and make some changes.  Then type `C-x g w` or `M-x
+;; git-whatsnew`.  A buffer will appear containing a diff-like view
+;; of your changes.  You can _stage_ the contents of the buffer by
+;; typing `C-c C-s`, or stage and commit in a single step by typing
+;; `C-c C-c`.  If you wish to stage only some of the changes in the
+;; whatsnew buffer, delete the patches that you wish to omit as
+;; follows. Navigate to them using `j` and `k` (or `n` and `p`), and
+;; then type `d` to delete the patch.  (This differs from the usual
+;; `diff-mode` binding of `k`, but I really like my j/k navigation.)
+;;
+;; In addition, the following is supported:
+;;
+;;   * View staged changes using `git-staged`.  From this buffer you
+;;     can edit the buffer to contain the patches you wish to
+;;     operate on (as in the whatsnew buffer), and then:
+;;     - Unstage them using `C-c C-u`, or
+;;     - Commit them using `C-c C-c`.
+;;
+;;   * Revert working tree changes from the whatsnew buffer using
+;;     `C-c C-r`.
+;;
+;;   * Amend the previous commit using `C-c C-a` from either the
+;;     whatsnew buffer or the staged buffer.
+;;
+;; I have tested gitchum with emacs version 24.1.
+;; The latest version is available for download at
+;; <http://chumsley.org/downloads/gitchum.el>.
+
+;;
 ;; Still TODO
 ;; - git-log and git-filelog
 ;;   Don't know yet what this should look like exactly; I usually want to describe a patch and/or diff against it
 ;; - git-amend
 ;; - git-blame?  (I don't know if I really care about this or not)
+;;
 ;;; Code:
 
 ;;;; =============================================== Faces ==============================================
