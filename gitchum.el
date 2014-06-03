@@ -1,4 +1,4 @@
-;;; jgit.el --- xdarcs-like git integration for emacs
+;;; gitchum.el --- xdarcs-like git integration for emacs
 
 ;; Copyright (C) 2010 James Wright
 
@@ -8,12 +8,12 @@
 
 ;; This file is not yet part of GNU Emacs.
 
-;; jgit.el is free software; you can redistribute it and/or modify
+;; gitchum.el is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation; either version 2, or (at your option)
 ;; any later version.
 
-;; jgit.el is distributed in the hope that it will be useful,
+;; gitchum.el is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
@@ -166,7 +166,7 @@ allows some or all of the changes to be staged and/or committed."
 
 (defun git-apply-buffer-diff (&rest options)
   "Call git apply on the current buffer's diff with OPTIONS."
-  (let ((patchfile (make-temp-file "jgit-patch.diff.")))
+  (let ((patchfile (make-temp-file "gitchum-patch.diff.")))
     (write-region nil nil patchfile)
     (if (zerop (apply 'git-sync-command nil "apply" (append options (list patchfile))))
       (delete-file patchfile))))
@@ -512,5 +512,5 @@ allows some or all of the changes to be committed and/or reverted."
     (bury-buffer)
     (delete-window)))
 
-(provide 'jgit)
+(provide 'gitchum)
 
