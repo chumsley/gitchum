@@ -203,9 +203,7 @@ allows some or all of the changes to be staged and/or committed."
   (let ((inhibit-read-only t))
     (git-command-window 'whatsnew same-window)
     (erase-buffer)
-    (if filename
-      (call-process "git" nil (current-buffer) nil "diff" filename)
-      (call-process "git" nil (current-buffer) nil "diff")))
+    (git-buffer-command "diff" filename))
   (git-whatsnew-mode)
   (set (make-local-variable 'git-whatsnew-target-file) filename)
   (if (= (point-min) (point-max))
@@ -283,7 +281,7 @@ allows some or all of the changes to be committed and/or reverted."
   (let ((inhibit-read-only t))
     (git-command-window 'staged same-window)
     (erase-buffer)
-    (call-process "git" nil (current-buffer) nil "diff" "--cached"))
+    (git-buffer-command "diff" "--cached"))
   (git-staged-mode)
   (if (= (point-min) (point-max))
     (let ((inhibit-read-only t))
@@ -334,7 +332,7 @@ allows some or all of the changes to be committed and/or reverted."
   (let ((inhibit-read-only t)
         (lines-left 0))
     (erase-buffer)
-    (call-process "git" nil (current-buffer) nil "ls-files" "--stage" "--full-name")
+    (git-buffer-command "ls-files" "--stage" "--full-name")
     (goto-char (point-min))
     (save-excursion
       (while (zerop lines-left)
@@ -439,13 +437,14 @@ allows some or all of the changes to be committed and/or reverted."
   (let ((p nil))
     (if amendp
       (progn
-        (call-process "git" nil (current-buffer) nil "show" "--format=%B" "--quiet")
+        (git-buffer-command "show" "--format=%B" "--quiet")
         (insert (substitute-command-keys git-commit-buffer-instructions))
         (setq p (point))
-        (call-process "git" nil (current-buffer) nil "commit" "--dry-run" "--amend" "--verbose"))
-      (insert (substitute-command-keys git-commit-buffer-instructions))
-      (setq p (point))
-      (call-process "git" nil (current-buffer) nil "commit" "--dry-run" "--verbose" "--untracked-files=no"))
+        (git-buffer-command "commit" "--dry-run" "--amend" "--verbose"))
+      (progn
+        (insert (substitute-command-keys git-commit-buffer-instructions))
+        (setq p (point))
+        (git-buffer-command "commit" "--dry-run" "--verbose" "--untracked-files=no")))
     (goto-char p)
     (when (re-search-forward "^Untracked files not listed" nil t)
       (delete-region (point-at-bol) (point-at-eol))
@@ -533,7 +532,14 @@ allows some or all of the changes to be committed and/or reverted."
                killable-buffer)
       (kill-buffer killable-buffer))
     ret))
-  
+
+(defun git-buffer-command (&rest args)
+  "Run `git ARGS` asynchronously, with the output going to the
+  current buffer.  Any NIL args will be removed."
+  (apply 'call-process "git" nil (current-buffer) nil
+         (remove nil args)))
+
+      
 
 ;;;; ============================================ From xdarcs ===========================================
 
