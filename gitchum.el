@@ -90,7 +90,7 @@
 (defvar git-prefix-map
   (let ((map (make-sparse-keymap)))
     (define-key map [?a] 'git-add)
-;    (define-key map [?b] 'git-blame)
+    (define-key map [?b] 'git-blame)
 ;    (define-key map [?l] 'git-log)
     (define-key map [?=] 'git-diff)
     (define-key map [?-] 'git-ediff)
@@ -110,6 +110,11 @@
 
 (if (not (keymapp (lookup-key global-map git-command-prefix)))
   (define-key global-map git-command-prefix git-prefix-map))
+
+;;;; ============================================== Aliases =============================================
+
+;; `vc-annotate' is so good, there's no reason to reinvent it
+(defalias 'git-blame 'vc-annotate)
 
 ;;;; ============================================= Commands =============================================
 
