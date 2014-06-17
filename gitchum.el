@@ -64,8 +64,10 @@
 ;; Still TODO
 ;; - git-log and git-filelog
 ;;   Don't know yet what this should look like exactly; I usually want to describe a patch and/or diff against it
-;; - git-amend
-;; - git-blame?  (I don't know if I really care about this or not)
+;; - git-amend safety check
+;; - factor major-modes, since they all kinda look the same?
+;; - factor the git-whatsnew boilerplate for deleting the window etc.?
+;; - handle nil buffer-file more gracefully
 ;;
 ;;; Code:
 
@@ -176,6 +178,8 @@
     map)
   "Keymap for git-whatsnew-mode")
 
+(defvar git-whatsnew-target-file nil)
+
 (defun git-whatsnew-mode ()
   (unless (eq major-mode 'git-whatsnew)
     ;; Don't kill locals if we're already in whatsnew-mode
@@ -186,21 +190,24 @@
   (use-local-map git-whatsnew-map)
   (set (make-local-variable 'revert-buffer-function)
        (lambda (ignore-auto noconfirm)
-         (git-whatsnew t)))
+         (git-whatsnew t git-whatsnew-target-file)))
   (setq buffer-read-only t)
   (setq minor-mode-overriding-map-alist
         (delq (assoc 'buffer-read-only minor-mode-overriding-map-alist)
               minor-mode-overriding-map-alist)))
 
-(defun git-whatsnew (&optional same-window)
+(defun git-whatsnew (&optional same-window filename)
   "Prints a list of all the changes in the current repo, and
 allows some or all of the changes to be staged and/or committed."
   (interactive)
   (let ((inhibit-read-only t))
     (git-command-window 'whatsnew same-window)
     (erase-buffer)
-    (call-process "git" nil (current-buffer) nil "diff"))
+    (if filename
+      (call-process "git" nil (current-buffer) nil "diff" filename)
+      (call-process "git" nil (current-buffer) nil "diff")))
   (git-whatsnew-mode)
+  (set (make-local-variable 'git-whatsnew-target-file) filename)
   (if (= (point-min) (point-max))
     (let ((inhibit-read-only t))
       (insert "No changes.")))
@@ -218,7 +225,7 @@ allows some or all of the changes to be staged and/or committed."
   (interactive)
   (when (yes-or-no-p "Do you really want to revert these changes? ")
     (git-apply-buffer-diff "--reverse")
-    (git-whatsnew t)))
+    (git-whatsnew t git-whatsnew-target-file)))
 
 (defun git-commit-from-whatsnew ()
   "Apply the changes in the current whatsnew window to the index
@@ -238,7 +245,7 @@ allows some or all of the changes to be staged and/or committed."
   "Apply the changes in the current whatsnew window to the index and refresh."
   (interactive)
   (git-apply-buffer-diff "--cached")
-  (git-whatsnew t))
+  (git-whatsnew t git-whatsnew-target-file))
 
 ;;;; ------------------------------------- git-staged ------------------------------------
 
@@ -299,19 +306,10 @@ allows some or all of the changes to be committed and/or reverted."
 
 ;;;; -------------------------------------- git-diff -------------------------------------
 
-;;TODO just do git-whatsnew on the current file
 (defun git-diff (&optional same-window)
-  "Shows the current state of the repository, according to the index."
+  "Show changes for the current file only, and allow staging."
   (interactive)
-  (require 'ansi-color)
-  (let ((filename (buffer-file-name (current-buffer))))
-    (git-command-window 'diff same-window)
-    (let ((inhibit-read-only t)
-          (lines-left 0))
-      (erase-buffer)
-      (call-process "git" nil (current-buffer) nil "diff" "HEAD" "--color" "--color-words" "--" filename)
-      (ansi-color-apply-on-region (point-min) (point-max))
-      (goto-char (point-min)))))
+  (git-whatsnew nil (buffer-file-name)))
 
 ;;;; ------------------------------------- git-ediff -------------------------------------
 
