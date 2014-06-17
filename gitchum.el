@@ -62,7 +62,6 @@
 
 ;;
 ;; Still TODO
-;; - git-log and git-filelog
 ;;   Don't know yet what this should look like exactly; I usually want to describe a patch and/or diff against it
 ;; - git-amend safety check
 ;; - factor major-modes, since they all kinda look the same?
@@ -93,12 +92,12 @@
   (let ((map (make-sparse-keymap)))
     (define-key map [?a] 'git-add)
     (define-key map [?b] 'git-blame)
-;    (define-key map [?l] 'git-log)
+   (define-key map [?l] 'git-log)
     (define-key map [?=] 'git-diff)
     (define-key map [?-] 'git-ediff)
 ;    (define-key map [??] 'git-describe-bindings)
 ;    (define-key map [?d] 'git-describe-patch)
-;    (define-key map [?f] 'git-filelog)
+    (define-key map [?f] 'git-filelog)
     (define-key map [?G] 'git-pull)
     (define-key map [?S] 'git-push)
     (define-key map [?i] 'git-init)
@@ -120,7 +119,7 @@
 
 ;;;; ============================================= Commands =============================================
 
-(defun git-command-window (name same-window)
+(defun git-command-window (name same-window &optional filename)
   "Switch to a readonly git command window with the
   default-directory set to the repo root.  Contents and local
   variables might be leftover from previous
@@ -133,6 +132,8 @@
                       (setq olddir dir
                             dir (file-name-directory (directory-file-name dir))))
                     (and (not (equal dir olddir)) dir))))
+    (when filename
+      (setq name (format "%s [%s]" name (file-name-nondirectory filename))))
     (if same-window
       (switch-to-buffer (format "*git %s: (%s)*" name repo-dir))
       (switch-to-buffer-other-window (format "*git %s: (%s)*" name repo-dir)))
@@ -201,7 +202,7 @@
 allows some or all of the changes to be staged and/or committed."
   (interactive)
   (let ((inhibit-read-only t))
-    (git-command-window 'whatsnew same-window)
+    (git-command-window 'whatsnew same-window filename)
     (erase-buffer)
     (git-buffer-command "diff" filename))
   (git-whatsnew-mode)
@@ -485,6 +486,31 @@ allows some or all of the changes to be committed and/or reverted."
    (buffer-substring (overlay-start git-commit-msg-overlay)
                      (overlay-end git-commit-msg-overlay))))
 
+;;;; -------------------------------------- git-log --------------------------------------
+
+(defvar git-log-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [?q] 'git-quit-current)
+    map))
+
+(defun git-log (&optional same-window filename all-branches)
+  "Shows the activity log for the current repo."
+  (interactive (list nil nil current-prefix-arg))
+  (require 'ansi-color)
+  (git-command-window 'log same-window filename)
+  (use-local-map git-log-map)
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (git-buffer-command "log" "--graph" "--pretty=format:%C(blue)%h%C(reset) (%C(green)%cr%C(reset)) - %s %C(red)%d%C(reset)"
+                        "--abbrev-commit" "--date=relative" (when all-branches "--all") "--" filename)
+    (ansi-color-apply-on-region (point-min) (point-max))
+    (goto-char (point-min))))
+
+(defun git-filelog (&optional same-window all-branches)
+  "Shows the activity log for the current file."
+  (interactive (list nil current-prefix-arg))
+  (git-log same-window (buffer-file-name) all-branches))
+
 ;;;; ---------------------------- simple pass-through commands ---------------------------
 
 (defun git-push ()
@@ -538,7 +564,6 @@ allows some or all of the changes to be committed and/or reverted."
   current buffer.  Any NIL args will be removed."
   (apply 'call-process "git" nil (current-buffer) nil
          (remove nil args)))
-
       
 
 ;;;; ============================================ From xdarcs ===========================================
