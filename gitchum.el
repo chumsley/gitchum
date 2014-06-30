@@ -539,8 +539,8 @@ allows some or all of the changes to be committed and/or reverted."
 
 ;;;; ====================================== git process interaction =====================================
 
-(defun git-sync-command (killable-buffer &rest args)
-  "Run `git ARGS` synchronously.  Prints output as a message; kills KILLABLE-BUFFER on success if non-nil."
+(defun git-sync-internal (&rest args)
+  "Run `git ARGS` synchronously, and return a pair of (RET . OUTPUT)."
   (let ((ret nil))
     (with-temp-buffer
       (setq ret (apply 'call-process "git" nil (list (current-buffer) t) nil args))
@@ -553,7 +553,14 @@ allows some or all of the changes to be committed and/or reverted."
            (looking-at "^")
            (not (= (point) (point-min)))
            (delete-char -1))
-      (message "%s" (buffer-substring (point-min) (point-max))))
+      (cons ret (buffer-substring (point-min) (point-max))))))
+
+(defun git-sync-command (killable-buffer &rest args)
+  "Run `git ARGS` synchronously.  Prints output as a message; kills KILLABLE-BUFFER on success if non-nil."
+  (let* ((raw (apply 'git-sync-internal args))
+         (ret (car raw))
+         (out (cdr raw)))
+    (message out)
     (when (and (zerop ret)
                killable-buffer)
       (kill-buffer killable-buffer))
