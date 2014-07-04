@@ -122,14 +122,17 @@
   default-directory set to the repo root.  Contents and local
   variables might be leftover from previous
   instances."
-  (let ((repo-dir (let ((dir (file-name-directory (expand-file-name (or (buffer-file-name (current-buffer))
+  (let* ((dir (file-name-directory (expand-file-name (or (buffer-file-name (current-buffer))
                                                                         default-directory))))
-                        (olddir "/"))
+         (olddir "/")
+         (repo-dir (progn
                     (while (and (not (equal dir olddir))
                                 (not (file-directory-p (concat dir "/.git"))))
                       (setq olddir dir
                             dir (file-name-directory (directory-file-name dir))))
                     (and (not (equal dir olddir)) dir))))
+    (unless repo-dir
+      (error "No git repo at or around '%s'" dir))
     (when filename
       (setq name (format "%s [%s]" name (file-name-nondirectory filename))))
     (if same-window
