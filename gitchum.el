@@ -64,7 +64,6 @@
 ;; Still TODO
 ;; - factor major-modes, since they all kinda look the same?
 ;; - factor the git-whatsnew boilerplate for deleting the window etc.?
-;; - handle nil buffer-file more gracefully
 ;;
 ;;; Code:
 
@@ -314,6 +313,8 @@ allows some or all of the changes to be committed and/or reverted."
 (defun git-diff (&optional same-window)
   "Show changes for the current file only, and allow staging."
   (interactive)
+  (unless (buffer-file-name)
+    (error "No file associated with buffer"))
   (git-whatsnew nil (buffer-file-name)))
 
 ;;;; ------------------------------------- git-ediff -------------------------------------
@@ -324,6 +325,8 @@ allows some or all of the changes to be committed and/or reverted."
   (require 'vc)
   (require 'vc-git)
   (let ((filename (buffer-file-name (current-buffer))))
+    (unless filename
+      (error "No file associated with buffer"))
     (vc-switch-backend filename 'git)
     (ediff-load-version-control)
     (funcall
