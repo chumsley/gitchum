@@ -62,8 +62,6 @@
 
 ;;
 ;; Still TODO
-;;   Don't know yet what this should look like exactly; I usually want to describe a patch and/or diff against it
-;; - git-amend safety check
 ;; - factor major-modes, since they all kinda look the same?
 ;; - factor the git-whatsnew boilerplate for deleting the window etc.?
 ;; - handle nil buffer-file more gracefully
@@ -237,8 +235,11 @@ allows some or all of the changes to be staged and/or committed."
   "Apply the changes in the current whatsnew window to the most
   recent commit."
   (interactive)
-  (git-apply-buffer-diff "--cached")
-  (git-commit t t))
+  (if (git-amend-safe-p)
+    (progn
+      (git-apply-buffer-diff "--cached")
+      (git-commit t t))
+    (message "git-amend safety check failed!\nHEAD has been pushed to upstream.")))
 
 (defun git-stage-from-whatsnew ()
   "Apply the changes in the current whatsnew window to the index and refresh."
@@ -301,7 +302,9 @@ allows some or all of the changes to be committed and/or reverted."
 
 (defun git-amend-from-staged ()
   (interactive)
-  (git-commit t t))
+  (if (git-amend-safe-p)
+    (git-commit t t)
+    (message "git-amend safety check failed!\nHEAD has been pushed to upstream.")))
 
 ;;;; -------------------------------------- git-diff -------------------------------------
 
@@ -469,13 +472,38 @@ allows some or all of the changes to be committed and/or reverted."
   (use-local-map git-commit-map)
   (setq git-commit-amend-p amendp))
 
+(defun git-amend-safe-p ()
+  "Return non-NIL if it is safe to amend the HEAD commit.
+'Safe' means either there is no upstream branch, or we are ahead
+of the upstream branch."
+  (let* ((raw (git-sync-internal "rev-list" "@{u}..@"))
+         (ret (car raw))
+         (out (cdr raw)))
+    (cond
+      ((and (zerop ret) (zerop (length out)))
+       ;; Up to date with upstream branch
+       nil)
+      ((zerop ret)
+       ;; Ahead of upstream branch
+       t)
+      (t
+       ;; No upstream branch
+       t))))
+    
+  
 (defun git-commit-execute ()
   "Commit the currently-staged patches using a message from the current commit buffer."
   (interactive)
   (message "git commit")
-  (if git-commit-amend-p
-    (git-sync-command (current-buffer) "commit" "--amend" "-m" (git-commit-message))
-    (git-sync-command (current-buffer) "commit" "-m" (git-commit-message)))
+  (cond
+    ((and git-commit-amend-p
+          (git-amend-safe-p))
+     (git-sync-command (current-buffer) "commit" "--amend" "-m" (git-commit-message)))
+    (git-commit-amend-p
+     (message "%s" "git-amend safety check failed!\nHEAD has been pushed to upstream."))
+    (t
+     (git-sync-command (current-buffer) "commit" "-m" (git-commit-message))))
+
   ;; If we return to a whatsnew or status window, refresh it
   (when (find major-mode '(git-whatsnew git-staged))
     (revert-buffer t t t)))
