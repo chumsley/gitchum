@@ -131,7 +131,9 @@
                             dir (file-name-directory (directory-file-name dir))))
                     (and (not (equal dir olddir)) dir))))
     (unless repo-dir
-      (error "No git repo at or around '%s'" dir))
+      (error "No git repo at or around '%s'"
+             (file-name-directory (expand-file-name (or (buffer-file-name (current-buffer))
+                                                        default-directory)))))
     (when filename
       (setq name (format "%s [%s]" name (file-name-nondirectory filename))))
     (if same-window
