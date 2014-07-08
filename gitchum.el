@@ -537,8 +537,8 @@ of the upstream branch."
   (use-local-map git-log-map)
   (let ((inhibit-read-only t))
     (erase-buffer)
-    (git-buffer-command "log" "--graph" "--pretty=format:%C(blue)%h%C(reset) (%C(green)%cr%C(reset)) - %s %C(red)%d%C(reset)"
-                        "--abbrev-commit" "--date=relative" (when all-branches "--all") "--" filename)
+    (git-buffer-command "log" "--graph" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %C(dim white)%an%C(reset) -%C(red)%d%C(reset) %s"
+                        "--abbrev-commit" "--date=short" (when all-branches "--all") "--" filename)
     (ansi-color-apply-on-region (point-min) (point-max))
     (goto-char (point-min))))
 
