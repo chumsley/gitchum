@@ -529,23 +529,28 @@ of the upstream branch."
     (define-key map [?q] 'git-quit-current)
     map))
 
-(defun git-log (&optional same-window filename all-branches)
+(defun git-log (&optional same-window filename no-branch-graph)
   "Shows the activity log for the current repo."
   (interactive (list nil nil current-prefix-arg))
   (require 'ansi-color)
+  (message "git-log %s %s %s" same-window filename no-branch-graph) ;TEST
   (git-command-window 'log same-window filename)
   (use-local-map git-log-map)
   (let ((inhibit-read-only t))
     (erase-buffer)
-    (git-buffer-command "log" "--graph" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %C(dim white)%an%C(reset) -%C(red)%d%C(reset) %s"
-                        "--abbrev-commit" "--date=short" (when all-branches "--all") "--" filename)
+    (if no-branch-graph
+      (git-buffer-command "log" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %<(12)%C(dim white)%an%C(reset) - %s%C(red)%d%C(reset)"
+                          "--abbrev-commit" "--date=short" (when filename "--follow") "--" filename)
+    
+      (git-buffer-command "log" "--graph" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %<(12)%C(dim white)%an%C(reset) - %s%C(red)%d%C(reset)"
+                          "--abbrev-commit" "--date=short" "--all" "--" filename))
     (ansi-color-apply-on-region (point-min) (point-max))
     (goto-char (point-min))))
 
-(defun git-filelog (&optional same-window all-branches)
+(defun git-filelog (&optional same-window branch-graph)
   "Shows the activity log for the current file."
   (interactive (list nil current-prefix-arg))
-  (git-log same-window (buffer-file-name) all-branches))
+  (git-log same-window (buffer-file-name) (not branch-graph)))
 
 ;;;; ---------------------------- simple pass-through commands ---------------------------
 
