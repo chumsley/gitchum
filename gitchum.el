@@ -610,6 +610,7 @@ of the upstream branch."
 (defun git-buffer-command (&rest args)
   "Run `git ARGS` asynchronously, with the output going to the
   current buffer.  Any NIL args will be removed."
+  ;TEST(apply 'message "git %s" (list (mapconcat 'identity (remove nil args) " ")))
   (apply 'call-process "git" nil (current-buffer) nil
          (remove nil args)))
       
