@@ -525,7 +525,7 @@ of the upstream branch."
   "Shows the activity log for the current repo."
   (interactive (list nil nil current-prefix-arg))
   (require 'ansi-color)
-  (message "git-log %s %s %s" same-window filename no-branch-graph) ;TEST
+  ; (message "git-log %s %s %s" same-window filename no-branch-graph) ;TEST
   (git-command-window 'log same-window filename)
   (use-local-map git-log-map)
   (let ((inhibit-read-only t))
@@ -569,6 +569,65 @@ of the upstream branch."
 (defun git-remove ()
   (interactive)
   (git-sync-command nil "rm" buffer-file-truename))
+
+
+;;;; ============================================= Mode-line ============================================
+
+(defun git-mode-line ()
+  "Return a string to insert into the mode-line."
+  (let ((rev-out (git-sync-internal "rev-parse"
+                                    "--git-dir"
+                                    "--is-inside-git-dir" "--is-bare-repository" "--is-inside-work-tree"
+                                    "--short" "HEAD")))
+    (when (zerop (car rev-out))
+      (let* ((vals (split-string (cdr rev-out)))
+             (git-dir (nth 0 vals))
+             (in-gitdir (string-equal (nth 1 vals) "true"))
+             (is-bare (string-equal (nth 2 vals) "true"))
+             (in-work (string-equal (nth 3 vals) "true"))
+             (short-sha (nth 4 vals))
+
+             (head-vals (git-sync-internal "symbolic-ref" "HEAD"))
+             (detachedp (not (zerop (car head-vals))))
+             (symbolic-head (car (last (split-string (cdr head-vals) "/"))))
+             
+             (is-unstaged )
+             (is-staged )
+
+             (c "")
+             (b "")
+             (r ""))
+             
+        (cond
+          ((or (file-exists-p (concat git-dir "rebase-merge")) ; git-prompt.sh goes into a lot more detail about rebasing
+               (file-exists-p (concat git-dir "rebase-apply")))
+           (setq r "|REBASE"))
+          ((file-exists-p (concat git-dir "MERGE_HEAD"))
+           (setq r "|MERGING"))
+          ((file-exists-p (concat git-dir "CHERRY_PICK_HEAD"))
+           (setq r "|CHERRY-PICKING"))
+          ((file-exists-p (concat git-dir "REVERT_HEAD"))
+           (setq r "|REVERTING"))
+          ((file-exists-p (concat git-dir "BISECT_LOG"))
+           (setq r "|BISECTING")))
+        (if detachedp
+          (setq b (concat "(" short-sha "...)"))
+          (setq b symbolic-head))
+        (cond
+          (is-bare (setq c "BARE:"))
+          (in-gitdir (setq b "GIT_DIR!")))
+        (when in-work
+          (when (not (zerop (car (git-sync-internal "diff" "--no-ext-diff" "--quiet" "--exit-code"))))
+            (setq b (concat b "*")))
+          (when (not (zerop (car (git-sync-internal "diff-index" "--cached" "--quiet" "HEAD"))))
+            (setq b (concat b "+")))
+          (when (file-readable-p (concat git-dir "refs/stash"))
+            (setq b (concat b "$"))))
+        (concat c b r)))))
+          
+          
+          
+        
 
 ;;;; ====================================== git process interaction =====================================
 
