@@ -596,19 +596,20 @@ of the upstream branch."
 
              (c "")
              (b "")
+             (sep ":")
              (r ""))
              
         (cond
-          ((or (file-exists-p (concat git-dir "rebase-merge")) ; git-prompt.sh goes into a lot more detail about rebasing
-               (file-exists-p (concat git-dir "rebase-apply")))
+          ((or (file-exists-p (concat git-dir "/rebase-merge")) ; git-prompt.sh goes into a lot more detail about rebasing
+               (file-exists-p (concat git-dir "/rebase-apply")))
            (setq r "|REBASE"))
-          ((file-exists-p (concat git-dir "MERGE_HEAD"))
+          ((file-exists-p (concat git-dir "/MERGE_HEAD"))
            (setq r "|MERGING"))
-          ((file-exists-p (concat git-dir "CHERRY_PICK_HEAD"))
+          ((file-exists-p (concat git-dir "/CHERRY_PICK_HEAD"))
            (setq r "|CHERRY-PICKING"))
-          ((file-exists-p (concat git-dir "REVERT_HEAD"))
+          ((file-exists-p (concat git-dir "/REVERT_HEAD"))
            (setq r "|REVERTING"))
-          ((file-exists-p (concat git-dir "BISECT_LOG"))
+          ((file-exists-p (concat git-dir "/BISECT_LOG"))
            (setq r "|BISECTING")))
         (if detachedp
           (setq b (concat "(" short-sha "...)"))
@@ -618,16 +619,15 @@ of the upstream branch."
           (in-gitdir (setq b "GIT_DIR!")))
         (when in-work
           (when (not (zerop (car (git-sync-internal "diff" "--no-ext-diff" "--quiet" "--exit-code"))))
-            (setq b (concat b "*")))
+            (setq b (concat b sep "*"))
+            (setq sep ""))
           (when (not (zerop (car (git-sync-internal "diff-index" "--cached" "--quiet" "HEAD"))))
-            (setq b (concat b "+")))
-          (when (file-readable-p (concat git-dir "refs/stash"))
-            (setq b (concat b "$"))))
+            (setq b (concat b sep "+"))
+            (setq sep ""))
+          (when (file-readable-p (concat git-dir "/refs/stash"))
+            (setq b (concat b sep "$"))
+            (setq sep "")))
         (concat c b r)))))
-          
-          
-          
-        
 
 ;;;; ====================================== git process interaction =====================================
 
