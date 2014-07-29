@@ -121,15 +121,7 @@
   default-directory set to the repo root.  Contents and local
   variables might be leftover from previous
   instances."
-  (let* ((dir (file-name-directory (expand-file-name (or (buffer-file-name (current-buffer))
-                                                                        default-directory))))
-         (olddir "/")
-         (repo-dir (progn
-                    (while (and (not (equal dir olddir))
-                                (not (file-directory-p (concat dir "/.git"))))
-                      (setq olddir dir
-                            dir (file-name-directory (directory-file-name dir))))
-                    (and (not (equal dir olddir)) dir))))
+  (let ((repo-dir (git-repo-dir)))
     (unless repo-dir
       (error "No git repo at or around '%s'"
              (file-name-directory (expand-file-name (or (buffer-file-name (current-buffer))
@@ -613,7 +605,13 @@ of the upstream branch."
   ;TEST(apply 'message "git %s" (list (mapconcat 'identity (remove nil args) " ")))
   (apply 'call-process "git" nil (current-buffer) nil
          (remove nil args)))
-      
+
+(defun git-repo-dir ()
+  "Get the repo directory around the current directory."
+  (let ((rev-out (git-sync-internal "rev-parse" "--git-dir")))
+    (when (zerop (car rev-out))
+      (abbreviate-file-name (file-name-directory (expand-file-name (cdr rev-out)))))))  
+
 
 ;;;; ============================================ From xdarcs ===========================================
 
