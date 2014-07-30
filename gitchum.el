@@ -585,7 +585,10 @@ of the upstream branch."
 
 (defun git-resync-mode-line ()
   "Update the mode-line."
-  (setq git-mode-line (concat "[" (git-mode-line) "]")))
+  (let ((ret (git-mode-line)))
+    (if ret
+      (setq git-mode-line (concat "[" ret "]"))
+      (setq git-mode-line nil))))
 
 (defun git-mode-line (&optional sep)
   "Return a string to insert into the mode-line.
