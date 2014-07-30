@@ -573,8 +573,36 @@ of the upstream branch."
 
 ;;;; ============================================= Mode-line ============================================
 
-(defun git-mode-line ()
-  "Return a string to insert into the mode-line."
+(defvar git-mode-line nil
+  "The git branch for the mode-line")
+(make-variable-buffer-local 'git-mode-line)
+
+(defun git-install-mode-line ()
+  (add-hook 'find-file-hook 'git-resync-mode-line)
+  (add-hook 'after-save-hook 'git-resync-mode-line)
+  (add-hook 'after-revert-hook 'git-resync-mode-line)
+  )
+
+(defun git-resync-mode-line ()
+  "Update the mode-line."
+  (setq git-mode-line (concat "[" (git-mode-line) "]")))
+
+(defun git-mode-line (&optional sep)
+  "Return a string to insert into the mode-line.
+The output is a simplified version of the output given by the code at 
+<https://github.com/git/git/blob/master/contrib/completion/git-prompt.sh>.
+
+The branch name is given if possible, followed by a separator, followed by
+  * if there are unstaged changes
+  + if there are staged but uncommitted changes
+  $ if there are stashed changes
+
+Empty repositories (which should display '#') are not yet handled.
+Upstream comparison (ahead/behind/diverged from upstream) is not yet suppported.
+Merge and rebase descriptions are significantly less detailed than the git-prompt versions.
+"
+  (unless sep
+    (setq sep ":"))
   (let ((rev-out (git-sync-internal "rev-parse"
                                     "--git-dir"
                                     "--is-inside-git-dir" "--is-bare-repository" "--is-inside-work-tree"
@@ -591,12 +619,8 @@ of the upstream branch."
              (detachedp (not (zerop (car head-vals))))
              (symbolic-head (car (last (split-string (cdr head-vals) "/"))))
              
-             (is-unstaged )
-             (is-staged )
-
              (c "")
              (b "")
-             (sep ":")
              (r ""))
              
         (cond
