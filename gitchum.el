@@ -580,8 +580,7 @@ of the upstream branch."
 (defun git-install-mode-line ()
   (add-hook 'find-file-hook 'git-resync-mode-line)
   (add-hook 'after-save-hook 'git-resync-mode-line)
-  (add-hook 'after-revert-hook 'git-resync-mode-line)
-  )
+  (add-hook 'after-revert-hook 'git-resync-mode-line))
 
 (defun git-resync-mode-line ()
   "Update the mode-line."
