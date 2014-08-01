@@ -678,7 +678,7 @@ Merge and rebase descriptions are significantly less detailed than the git-promp
   (let* ((raw (apply 'git-sync-internal args))
          (ret (car raw))
          (out (cdr raw)))
-    (message out)
+    (message "%s" out)
     (when (and (zerop ret)
                killable-buffer)
       (kill-buffer killable-buffer))
