@@ -210,7 +210,7 @@ allows some or all of the changes to be staged and/or committed."
   "Call git apply on the current buffer's diff with OPTIONS."
   (let ((patchfile (make-temp-file "gitchum-patch.diff.")))
     (write-region nil nil patchfile)
-    (if (zerop (apply 'git-sync-command nil "apply" (append options (list patchfile))))
+    (if (zerop (apply 'git-sync-command nil "apply" (append '("--ignore-whitespace") options (list patchfile))))
       (delete-file patchfile))))
 
 (defun git-revert-from-whatsnew ()
