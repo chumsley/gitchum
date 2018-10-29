@@ -531,10 +531,10 @@ of the upstream branch."
   (let ((inhibit-read-only t))
     (erase-buffer)
     (if no-branch-graph
-      (git-buffer-command "log" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %<(12)%C(dim white)%an%C(reset) - %s%C(red)%d%C(reset)"
+      (git-buffer-command "log" "--color=always" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %<(12)%C(dim white)%an%C(reset) - %s%C(red)%d%C(reset)"
                           "--abbrev-commit" "--date=short" (when filename "--follow") "--" filename)
     
-      (git-buffer-command "log" "--graph" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %<(12)%C(dim white)%an%C(reset) - %s%C(red)%d%C(reset)"
+      (git-buffer-command "log" "--color=always" "--graph" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %<(12)%C(dim white)%an%C(reset) - %s%C(red)%d%C(reset)"
                           "--abbrev-commit" "--date=short" "--all" "--" filename))
     (ansi-color-apply-on-region (point-min) (point-max))
     (goto-char (point-min))))
