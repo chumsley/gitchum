@@ -225,7 +225,7 @@ allows some or all of the changes to be staged and/or committed."
   and open a commit dialogue buffer."
   (interactive)
   (git-apply-buffer-diff "--cached")
-  (git-commit t))
+  (git-commit nil t))
 
 (defun git-amend-from-whatsnew ()
   "Apply the changes in the current whatsnew window to the most
@@ -234,7 +234,7 @@ allows some or all of the changes to be staged and/or committed."
   (if (git-amend-safe-p)
     (progn
       (git-apply-buffer-diff "--cached")
-      (git-commit t t))
+      (git-commit nil t t))
     (message "git-amend safety check failed!\nHEAD has been pushed to upstream.")))
 
 (defun git-stage-from-whatsnew ()
@@ -294,12 +294,12 @@ allows some or all of the changes to be committed and/or reverted."
 
 (defun git-commit-from-staged ()
   (interactive)
-  (git-commit t))
+  (git-commit nil t))
 
 (defun git-amend-from-staged ()
   (interactive)
   (if (git-amend-safe-p)
-    (git-commit t t)
+    (git-commit nil t t)
     (message "git-amend safety check failed!\nHEAD has been pushed to upstream.")))
 
 ;;;; -------------------------------------- git-diff -------------------------------------
@@ -382,6 +382,7 @@ allows some or all of the changes to be committed and/or reverted."
 
 (defvar git-commit-msg-overlay nil)
 (defvar git-commit-amend-p nil)
+(defvar git-commit-all-p nil)
 
 (defun git-commit-msg-mode ()
   "Major mode for editing git commit messages."
@@ -392,6 +393,7 @@ allows some or all of the changes to be committed and/or reverted."
   (setq mode-name "git-commit-msg")
   (use-local-map git-commit-msg-map)
   (set (make-local-variable 'git-commit-amend-p) nil)
+  (set (make-local-variable 'git-commit-all-p) nil)
   (turn-on-font-lock)
 
   ;; Protect the boilerplate
@@ -436,7 +438,7 @@ allows some or all of the changes to be committed and/or reverted."
 #
 ")
 
-(defun git-commit-insert-instructions (amendp)
+(defun git-commit-insert-instructions (amendp allp)
   "Insert a message template for the next commit."
   (let ((p nil))
     (if amendp
@@ -444,11 +446,11 @@ allows some or all of the changes to be committed and/or reverted."
         (git-buffer-command "show" "--format=%B" "--quiet")
         (insert (substitute-command-keys git-commit-buffer-instructions))
         (setq p (point))
-        (git-buffer-command "commit" "--dry-run" "--amend" "--verbose"))
+        (git-buffer-command "commit" "--dry-run" (when allp "-a")  "--amend" "--verbose"))
       (progn
         (insert (substitute-command-keys git-commit-buffer-instructions))
         (setq p (point))
-        (git-buffer-command "commit" "--dry-run" "--verbose" "--untracked-files=no")))
+        (git-buffer-command "commit" "--dry-run" (when allp "-a") "--verbose" "--untracked-files=no")))
     (goto-char p)
     (when (re-search-forward "^Untracked files not listed" nil t)
       (delete-region (point-at-bol) (point-at-eol))
@@ -459,18 +461,19 @@ allows some or all of the changes to be committed and/or reverted."
       (forward-line -1)
       (string-rectangle p (point) "# "))))
 
-(defun git-commit (&optional same-window amendp msg)
+(defun git-commit (&optional allp same-window amendp msg)
   "Commit the currently staged patches."
-  (interactive)
+  (interactive "P")
   (git-command-window 'commit same-window)
   (toggle-read-only 0)
   (let ((inhibit-read-only t))
     (erase-buffer)
-    (git-commit-insert-instructions amendp)
+    (git-commit-insert-instructions amendp allp)
     (goto-char (point-min)))
   (git-commit-msg-mode)
   (use-local-map git-commit-map)
-  (setq git-commit-amend-p amendp))
+  (setq git-commit-amend-p amendp
+        git-commit-all-p allp))
 
 (defun git-amend-safe-p ()
   "Return non-NIL if it is safe to amend the HEAD commit.
@@ -502,7 +505,7 @@ of the upstream branch."
     (git-commit-amend-p
      (message "%s" "git-amend safety check failed!\nHEAD has been pushed to upstream."))
     (t
-     (git-sync-command (current-buffer) "commit" "-m" (git-commit-message))))
+     (git-sync-command (current-buffer) "commit" (when git-commit-all-p "-a") "-m" (git-commit-message))))
 
   ;; If we return to a whatsnew or status window, refresh it
   (when (find major-mode '(git-whatsnew git-staged))
@@ -675,7 +678,7 @@ Merge and rebase descriptions are significantly less detailed than the git-promp
 
 (defun git-sync-command (killable-buffer &rest args)
   "Run `git ARGS` synchronously.  Prints output as a message; kills KILLABLE-BUFFER on success if non-nil."
-  (let* ((raw (apply 'git-sync-internal args))
+  (let* ((raw (apply 'git-sync-internal (remove nil args)))
          (ret (car raw))
          (out (cdr raw)))
     (message "%s" out)
