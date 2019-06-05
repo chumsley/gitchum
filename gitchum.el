@@ -1,10 +1,12 @@
 ;;; gitchum.el --- A set of commands for managing git repositories from emacs.
 
-;; Copyright (C) 2010,2014 James Wright
+;; Copyright (C) 2010-2019 James Wright
 
 ;; Author: James Wright <james@chumsley.org>
+;; Version: 1.1
 ;; Created: 28 Apr 2010
-;; Keywords: 
+;; Keywords: git
+;; Package-Requires: (ediff vc ansi-color)
 
 ;; This file is not yet part of GNU Emacs.
 
@@ -724,3 +726,4 @@ Merge and rebase descriptions are significantly less detailed than the git-promp
 
 (provide 'gitchum)
 
+;;; gitchum.el ends here
