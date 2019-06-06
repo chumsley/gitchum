@@ -95,7 +95,7 @@
     (define-key map [?=] 'git-diff)
     (define-key map [?-] 'git-ediff)
 ;    (define-key map [??] 'git-describe-bindings)
-;    (define-key map [?d] 'git-describe-patch)
+    (define-key map [?d] 'git-describe-commit)
     (define-key map [?f] 'git-filelog)
     (define-key map [?G] 'git-pull)
     (define-key map [?S] 'git-push)
@@ -542,12 +542,44 @@ of the upstream branch."
       (git-buffer-command "log" "--color=always" "--graph" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %<(12)%C(dim white)%an%C(reset) - %s%C(red)%d%C(reset)"
                           "--abbrev-commit" "--date=short" "--all" "--" filename))
     (ansi-color-apply-on-region (point-min) (point-max))
-    (goto-char (point-min))))
-
+    (goto-char (point-min))))  
+  
 (defun git-filelog (&optional same-window branch-graph)
   "Shows the activity log for the current file."
   (interactive (list nil current-prefix-arg))
+  (require 'ansi-color)
   (git-log same-window (buffer-file-name) (not branch-graph)))
+
+;;;; --------------------------------- git-describe-commit --------------------------------
+
+(defvar git-describe-commit-map
+  (let ((map (make-sparse-keymap 'git-describe-commit-map)))
+    (set-keymap-parent map git-diff-map)
+    map))
+
+(defun git-describe-commit-mode ()
+  (unless (eq major-mode 'git-describe-commit)
+    ;; Don't kill locals if we're already in describe-commit-mode
+    (kill-all-local-variables)
+    (diff-mode))
+  (setq major-mode 'git-describe-commit)
+  (setq mode-name "git-describe-commit")
+  (use-local-map git-describe-commit-map)
+  (setq buffer-read-only t)
+  (setq minor-mode-overriding-map-alist
+        (delq (assoc 'buffer-read-only minor-mode-overriding-map-alist)
+              minor-mode-overriding-map-alist)))
+
+(defun git-describe-commit (&optional same-window commit-hash)
+  "Describe COMMIT-HASH"
+  (interactive (list t (read-string "Describe commit: ")))
+  (git-command-window 'describe-commit same-window commit-hash)
+  (use-local-map git-describe-commit-map)
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (git-buffer-command "show" commit-hash))
+  (git-describe-commit-mode)
+  (goto-char (point-min)))
 
 ;;;; ---------------------------- simple pass-through commands ---------------------------
 
