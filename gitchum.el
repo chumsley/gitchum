@@ -524,7 +524,21 @@ of the upstream branch."
 (defvar git-log-map
   (let ((map (make-sparse-keymap)))
     (define-key map [?q] 'git-quit-current)
+    (define-key map [?j] 'git-log-next-commit)
+    (define-key map [?k] 'git-log-prev-commit)
     map))
+
+
+(defun git-log-next-commit (&optional delta)
+  (interactive)
+  (setq delta (or delta 1))
+  (goto-char (point-at-bol))
+  (while (and (zerop (forward-line delta))
+              (not (looking-at ".*[0-9a-f]+")))))
+
+(defun git-log-prev-commit ()
+  (interactive)
+  (git-log-next-commit -1))
 
 (defun git-log (&optional same-window filename no-branch-graph)
   "Shows the activity log for the current repo."
@@ -542,13 +556,48 @@ of the upstream branch."
       (git-buffer-command "log" "--color=always" "--graph" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %<(12)%C(dim white)%an%C(reset) - %s%C(red)%d%C(reset)"
                           "--abbrev-commit" "--date=short" "--all" "--" filename))
     (ansi-color-apply-on-region (point-min) (point-max))
-    (goto-char (point-min))))  
-  
+    (goto-char (point-min))
+    (git-log-add-properties)))
+
 (defun git-filelog (&optional same-window branch-graph)
   "Shows the activity log for the current file."
   (interactive (list nil current-prefix-arg))
   (require 'ansi-color)
   (git-log same-window (buffer-file-name) (not branch-graph)))
+
+(defvar git-describe-commit-property-map
+  (let ((map (make-sparse-keymap 'git-describe-commit-property-map)))
+    (define-key map '[return] 'git-describe-commit-at-point)
+    (define-key map '[mouse-1] 'git-describe-commit-from-event)
+    map))
+
+(defun git-log-add-properties ()
+  (save-excursion
+    (goto-char (point-min))
+    (let ((remain 0)
+          (inhibit-read-only t))
+      (while (zerop remain)
+        (goto-char (point-at-bol))
+        (let ((p (re-search-forward "[0-9a-f]+" nil t)))
+          (when p
+            (setq p (point))
+            (forward-word -1)
+            (put-text-property (point-at-bol) p 'mouse-face 'highlight)
+            (put-text-property (point-at-bol) p 'keymap git-describe-commit-property-map)
+            (put-text-property (point-at-bol) p 'commit-hash (buffer-substring-no-properties (point) p))))
+        (goto-char (point-at-eol))
+        (setq remain (forward-line))))))            
+
+(defun git-describe-commit-from-event (event)
+  (interactive "e")
+  (goto-char (second (second event)))
+  (git-describe-commit-at-point))
+
+(defun git-describe-commit-at-point ()
+  (interactive)
+  (if (get-text-property (point) 'commit-hash)
+      (git-describe-commit t (get-text-property (point) 'commit-hash))
+    (user-error "No commit hash at point")))
 
 ;;;; --------------------------------- git-describe-commit --------------------------------
 
