@@ -526,7 +526,21 @@ of the upstream branch."
     (define-key map [?q] 'git-quit-current)
     (define-key map [?j] 'git-log-next-commit)
     (define-key map [?k] 'git-log-prev-commit)
+    (define-key map [(control ?c) (control ?c)] 'git-log-checkout)
     map))
+
+(defun git-log-checkout (&optional master)
+  "Checkout the commit on the current line, or 'master' if prefix
+  argument"
+  (interactive "P")  
+  (if master
+      (and (git-sync-command nil "checkout" "master")
+           (revert-buffer t t t))
+    (let ((commit (get-text-property (point-at-bol) 'commit-hash)))
+      (if commit
+          (and (git-sync-command nil "checkout" commit)
+               (revert-buffer t t t))
+        (user-error "No commit hash at current line")))))
 
 
 (defun git-log-next-commit (&optional delta)
@@ -540,6 +554,9 @@ of the upstream branch."
   (interactive)
   (git-log-next-commit -1))
 
+(defvar git-log-filename nil
+  "Filename being logged in the current window.")
+
 (defun git-log (&optional same-window filename no-branch-graph)
   "Shows the activity log for the current repo."
   (interactive (list nil nil current-prefix-arg))
@@ -547,6 +564,10 @@ of the upstream branch."
   ; (message "git-log %s %s %s" same-window filename no-branch-graph) ;TEST
   (git-command-window 'log same-window filename)
   (use-local-map git-log-map)
+  (set (make-local-variable 'git-log-filename) filename)
+  (set (make-local-variable 'revert-buffer-function)
+       (lambda (ignore-auto noconfirm)
+         (git-log t git-log-filename)))
   (let ((inhibit-read-only t))
     (erase-buffer)
     (if no-branch-graph
