@@ -561,14 +561,8 @@ of the upstream branch."
   "Shows the activity log for the current repo."
   (interactive (list nil nil current-prefix-arg))
   (require 'ansi-color)
-  ; (message "git-log %s %s %s" same-window filename no-branch-graph) ;TEST
-  (git-command-window 'log same-window filename)
-  (use-local-map git-log-map)
-  (set (make-local-variable 'git-log-filename) filename)
-  (set (make-local-variable 'revert-buffer-function)
-       (lambda (ignore-auto noconfirm)
-         (git-log t git-log-filename)))
   (let ((inhibit-read-only t))
+    (git-command-window 'log same-window filename)
     (erase-buffer)
     (if no-branch-graph
       (git-buffer-command "log" "--color=always" "--pretty=format:%C(blue)%h%C(reset) %C(dim green)%cd%C(reset) %<(12)%C(dim white)%an%C(reset) - %s%C(red)%d%C(reset)"
@@ -578,7 +572,25 @@ of the upstream branch."
                           "--abbrev-commit" "--date=short" "--all" "--" filename))
     (ansi-color-apply-on-region (point-min) (point-max))
     (goto-char (point-min))
-    (git-log-add-properties)))
+    (git-log-add-properties))
+  (git-log-mode))
+
+(defun git-log-mode ()
+  (message "GIT LOG MODE") ;TEST
+  (unless (eq major-mode 'git-log)
+    ;; Don't kill locals if we're already in log-mode
+    (kill-all-local-variables)
+    (diff-mode))
+  (setq major-mode 'git-log)
+  (setq mode-name "git-log")
+  (use-local-map git-log-map)
+  (set (make-local-variable 'revert-buffer-function)
+       (lambda (ignore-auto noconfirm)
+         (git-log t git-log-filename)))
+  (setq buffer-read-only t)
+  (setq minor-mode-overriding-map-alist
+        (delq (assoc 'buffer-read-only minor-mode-overriding-map-alist)
+              minor-mode-overriding-map-alist)))
 
 (defun git-filelog (&optional same-window branch-graph)
   "Shows the activity log for the current file."
