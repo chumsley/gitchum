@@ -315,8 +315,11 @@ allows some or all of the changes to be committed and/or reverted."
 
 ;;;; ------------------------------------- git-ediff -------------------------------------
 
-(defun git-ediff ()
-  (interactive)
+(defun git-ediff (&optional revision)
+  (interactive
+   (if current-prefix-arg
+       (list (read-string "Compare to version: ")) ;TODO history, completion of versions, etc.
+     (list nil)))
   (require 'ediff)
   (require 'vc)
   (require 'vc-git)
@@ -327,7 +330,9 @@ allows some or all of the changes to be committed and/or reverted."
     (ediff-load-version-control)
     (funcall
      (intern (format "ediff-%S-internal" ediff-version-control-package))
-     "" "" nil)))
+     (or revision "") ; latest version
+     "" ; current buffer
+     nil)))
 
 ;;;; --------------------------------- git-query-manifest --------------------------------
 
