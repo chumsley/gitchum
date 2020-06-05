@@ -581,7 +581,6 @@ of the upstream branch."
   (git-log-mode))
 
 (defun git-log-mode ()
-  (message "GIT LOG MODE") ;TEST
   (unless (eq major-mode 'git-log)
     ;; Don't kill locals if we're already in log-mode
     (kill-all-local-variables)
