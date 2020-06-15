@@ -663,7 +663,7 @@ of the upstream branch."
   (use-local-map git-describe-commit-map)
   (let ((inhibit-read-only t))
     (erase-buffer)
-    (git-buffer-command "show" commit-hash))
+    (git-buffer-command "show" "--date=local" commit-hash))
   (git-describe-commit-mode)
   (goto-char (point-min)))
 
