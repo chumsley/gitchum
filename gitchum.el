@@ -3,7 +3,7 @@
 ;; Copyright (C) 2010-2019 James Wright
 
 ;; Author: James Wright <james@chumsley.org>
-;; Version: 1.1
+;; Version: 1.3
 ;; Created: 28 Apr 2010
 ;; Keywords: git
 ;; Package-Requires: (ediff vc ansi-color)
