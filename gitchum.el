@@ -821,12 +821,23 @@ of the upstream branch."
   (add-hook 'after-save-hook 'git-resync-mode-line)
   (add-hook 'after-revert-hook 'git-resync-mode-line))
 
-(defun git-resync-mode-line ()
-  "Update the mode-line."
-  (let ((ret (git-mode-line)))
-    (if ret
-      (setq git-mode-line (concat "[" ret "]"))
-      (setq git-mode-line nil))))
+(defun git-resync-mode-line (&optional file-name)
+  "Update the mode-line in all buffers in the same repository as
+  FILE-NAME.  If FILE-NAME, is not provided, then use the file of
+  the current buffer."
+  (let* ((default-directory
+          (if file-name (file-name-directory file-name) default-directory))
+         (repo-dir (git-repo-dir))
+         (ret (git-mode-line)))
+    (mapc (lambda (buffer)
+            (when (buffer-file-name buffer)
+              (with-current-buffer buffer
+                (when (equal (git-repo-dir) repo-dir)
+                  (message "update %s" (buffer-file-name))
+                  (setq git-mode-line
+                        (when ret
+                          (concat "[" ret "]")))))))
+          (buffer-list))))
 
 (defun git-mode-line (&optional sep)
   "Return a string to insert into the mode-line.
@@ -934,7 +945,7 @@ Merge and rebase descriptions are significantly less detailed than the git-promp
   "Get the repo directory around the current directory."
   (let ((rev-out (git-sync-internal "rev-parse" "--git-dir")))
     (when (zerop (car rev-out))
-      (abbreviate-file-name (file-name-directory (expand-file-name (cdr rev-out)))))))  
+      (abbreviate-file-name (file-name-directory (file-truename (cdr rev-out)))))))
 
 
 ;;;; ============================================ From xdarcs ===========================================
