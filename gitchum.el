@@ -293,29 +293,36 @@ allows some or all of the changes to be staged and/or committed."
           (current-binary nil)
           (diff-re "^diff --git a/\\(.*\\) b/\\(.*\\)$")
           (binary-re "^Binary files .* differ$"))
-      (when (looking-at diff-re)
-        (setq fs (match-beginning 0)
-              current-fname (match-string 1)))
-      (while (zerop (forward-line))
-        (cond
-          ;; Flag based on opaque "binary files diff"
-          ((looking-at binary-re)
-           (setq current-binary t))
+      (labels ((flush-binary-properties ()
+                 (let ((inhibit-read-only t))
+                   (add-text-properties fs (point)
+                                        (list 'face 'highlight
+                                              'binary-file current-fname
+                                              'keymap git-binary-diff-map))))
+               (handle-diff-line ()
+                 (when current-binary
+                   (flush-binary-properties))
+                 (setq fs (match-beginning 0)
+                       current-binary nil
+                       current-fname (match-string 1))
+                 (when (member (file-name-extension current-fname)
+                               git-binary-extensions)
+                   (setq current-binary t))))             
 
-          ;; TODO: flag based on filename
-          
-          ;; Looking at a file diff line means time to flush anything we've been accumulating
-          ((looking-at diff-re)
-           (when current-binary
-             (let ((inhibit-read-only t))
-               (add-text-properties fs (point)
-                                    (list 'face 'highlight
-                                          'binary-file current-fname
-                                          'keymap git-binary-diff-map))))
-           (setq fs (match-beginning 0)
-                 current-binary nil
-                 current-fname (match-string 1))))))))
+        (when (looking-at diff-re)
+          (handle-diff-line))
 
+        (while (zerop (forward-line))
+          (cond
+            ((looking-at binary-re)
+             (setq current-binary t))
+            ((looking-at diff-re)             
+             (handle-diff-line))))        
+
+        (when current-binary
+          (flush-binary-properties))))))
+
+;;TODO handle stage-binary-files, commit-binary-files, and revert-binary-files
 
 ;;;; ------------------------------------- git-staged ------------------------------------
 
