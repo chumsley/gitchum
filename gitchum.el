@@ -812,6 +812,9 @@ of the upstream branch."
 
 ;;;; ============================================= Mode-line ============================================
 
+(defvar git-watched-repos nil
+  "Git-dirs being watched")
+
 (defvar git-mode-line nil
   "The git branch for the mode-line")
 (make-variable-buffer-local 'git-mode-line)
@@ -821,23 +824,64 @@ of the upstream branch."
   (add-hook 'after-save-hook 'git-resync-mode-line)
   (add-hook 'after-revert-hook 'git-resync-mode-line))
 
+(defun git-buffer-killed-callback ()
+  (let ((buffer-count 0)
+        (repo-dir (when (buffer-file-name) (git-repo-dir))))
+    (when repo-dir
+      (map-repo-buffers
+       (lambda ()
+         (setq buffer-count (+ buffer-count 1))))
+      (when (<= buffer-count 1)
+        (let ((cell (assoc repo-dir git-watched-repos)))
+          (when cell
+            (file-notify-rm-watch (cdr cell))
+            (setq git-watched-repos (remove (assoc repo-dir git-watched-repos)
+                                            git-watched-repos))))))))
+
+(defun map-repo-buffers (fn &optional file-name)
+  "Call FN with current buffer set to every buffer that shares a
+  git repo with FILE-NAME (or with the current buffer if
+  FILE-NAME is NIL)."
+  (let* ((default-directory
+          (if file-name (file-name-directory file-name) default-directory))
+         (repo-dir (git-repo-dir)))
+    (mapc (lambda (buffer)
+            (when (buffer-file-name buffer)
+              (with-current-buffer buffer
+                (when (equal (git-repo-dir) repo-dir)
+                  (funcall fn)))))
+          (buffer-list))))
+
+(defun git-gitdir-changed-callback (event)
+  (git-resync-mode-line (third event)))
+
 (defun git-resync-mode-line (&optional file-name)
   "Update the mode-line in all buffers in the same repository as
   FILE-NAME.  If FILE-NAME, is not provided, then use the file of
   the current buffer."
   (let* ((default-directory
           (if file-name (file-name-directory file-name) default-directory))
-         (repo-dir (git-repo-dir))
-         (ret (git-mode-line)))
-    (mapc (lambda (buffer)
-            (when (buffer-file-name buffer)
-              (with-current-buffer buffer
-                (when (equal (git-repo-dir) repo-dir)
-                  (message "update %s" (buffer-file-name))
-                  (setq git-mode-line
-                        (when ret
-                          (concat "[" ret "]")))))))
-          (buffer-list))))
+         (repo-dir (git-repo-dir)))
+    (when repo-dir
+      (let* ((default-directory repo-dir)
+             (git-dir (concat repo-dir ".git"))
+             (ret (git-mode-line)))
+        ;; First make sure we're watching the .git dir for changes
+        (unless (assoc repo-dir git-watched-repos)
+          (push (cons repo-dir
+                      (file-notify-add-watch git-dir '(change) 'git-gitdir-changed-callback))
+                git-watched-repos))
+
+        ;; Then set the git modeline
+        (map-repo-buffers
+         (lambda ()
+           ;; Hook into kill-buffer so we can remove the watch if necessary
+           (add-hook 'kill-buffer-hook 'git-buffer-killed-callback)
+
+           ;; Actually update the modeline
+           (setq git-mode-line
+                 (when ret
+                   (concat "[" ret "]")))))))))
 
 (defun git-mode-line (&optional sep)
   "Return a string to insert into the mode-line.
@@ -937,15 +981,15 @@ Merge and rebase descriptions are significantly less detailed than the git-promp
 (defun git-buffer-command (&rest args)
   "Run `git ARGS` asynchronously, with the output going to the
   current buffer.  Any NIL args will be removed."
-  ;TEST(apply 'message "git %s" (list (mapconcat 'identity (remove nil args) " ")))
   (apply 'call-process "git" nil (current-buffer) nil
          (remove nil args)))
 
 (defun git-repo-dir ()
   "Get the repo directory around the current directory."
-  (let ((rev-out (git-sync-internal "rev-parse" "--git-dir")))
-    (when (zerop (car rev-out))
-      (abbreviate-file-name (file-name-directory (file-truename (cdr rev-out)))))))
+  (let ((repo-dir (locate-dominating-file default-directory ".git")))
+    (when repo-dir
+      (abbreviate-file-name (file-name-directory (file-truename repo-dir))))))
+
 
 
 ;;;; ============================================ From xdarcs ===========================================
