@@ -234,14 +234,18 @@ allows some or all of the changes to be staged and/or committed."
   "Revert the changes in the current buffer in the working tree."
   (interactive)
   (when (yes-or-no-p "Do you really want to revert these changes? ")
-    (git-apply-buffer-diff "--reverse")
+    (git-restore-binaries)
+    (unless (= (point-min) (point-max))
+      (git-apply-buffer-diff "--reverse"))
     (git-whatsnew t git-whatsnew-target-file)))
 
 (defun git-commit-from-whatsnew ()
   "Apply the changes in the current whatsnew window to the index
   and open a commit dialogue buffer."
   (interactive)
-  (git-apply-buffer-diff "--cached")
+  (git-stage-binaries)
+  (unless (= (point-min) (point-max))
+    (git-apply-buffer-diff "--cached"))
   (git-commit nil t))
 
 (defun git-amend-from-whatsnew ()
@@ -250,14 +254,18 @@ allows some or all of the changes to be staged and/or committed."
   (interactive)
   (if (git-amend-safe-p)
     (progn
-      (git-apply-buffer-diff "--cached")
+      (git-stage-binaries)
+      (unless (= (point-min) (point-max))
+        (git-apply-buffer-diff "--cached"))
       (git-commit nil t t))
     (message "git-amend safety check failed!\nHEAD has been pushed to upstream.")))
 
 (defun git-stage-from-whatsnew ()
   "Apply the changes in the current whatsnew window to the index and refresh."
   (interactive)
-  (git-apply-buffer-diff "--cached")
+  (git-stage-binaries)
+  (unless (= (point-min) (point-max))
+    (git-apply-buffer-diff "--cached"))
   (git-whatsnew t git-whatsnew-target-file))
 
 
@@ -283,7 +291,7 @@ allows some or all of the changes to be staged and/or committed."
 
 (defun git-binary-no-split ()
   (interactive)
-  (message "Splitting binary files is not supported"))
+  (user-error "Splitting binary files is not supported"))
 
 (defun git-diff-flag-binaries ()
   (save-excursion
@@ -321,6 +329,35 @@ allows some or all of the changes to be staged and/or committed."
 
         (when current-binary
           (flush-binary-properties))))))
+
+(defun map-and-kill-binary-files (fn)
+  "Apply FN to each binary file in the buffer, killing each file
+  after it is processed.  FN will be passed the name of the
+  file."
+  (flet ((maybe-handle-file ()
+           (let ((fname (get-char-property (point) 'binary-file)))
+             (when fname
+               (funcall fn fname)
+               (git-binary-kill)
+               t))))
+    (save-excursion
+      (goto-char (point-min))
+      (while (or (maybe-handle-file)
+                 (zerop (forward-line)))))))
+
+(defun git-stage-binaries ()
+  "Apply binary 'diffs' by adding entire files.  Binary 'diffs'
+  are removed after processing."
+  (map-and-kill-binary-files
+   (lambda (fname)
+     (git-sync-command nil "add" (file-truename fname)))))
+
+(defun git-restore-binaries ()
+  "Revert binary 'diffs' by restoring entire files.  Binary 'diffs'
+  are removed after processing."
+  (map-and-kill-binary-files
+   (lambda (fname)
+     (git-sync-command nil "restore" (file-truename fname)))))
 
 ;;TODO handle stage-binary-files, commit-binary-files, and revert-binary-files
 
