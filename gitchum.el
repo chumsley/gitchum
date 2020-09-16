@@ -82,6 +82,13 @@
   "Prefix key sequence for git commands."
   :group 'git)
 
+(defcustom git-binary-extensions '("pdf" "key"
+                                   "jpg" "jpeg" "png")
+  "Extensions to treat as binary files"
+  :group 'git
+  :type '(repeat string))
+                                   
+
 
 ;;;; ============================================== Keymaps =============================================
 
@@ -191,7 +198,14 @@
   (setq buffer-read-only t)
   (setq minor-mode-overriding-map-alist
         (delq (assoc 'buffer-read-only minor-mode-overriding-map-alist)
-              minor-mode-overriding-map-alist)))
+              minor-mode-overriding-map-alist))
+
+  ;; local to allow navigation in binary hunks
+  (set (make-local-variable 'diff-file-header-re)
+       (concat "^Binary files .* differ$\\|" diff-file-header-re))
+  (set (make-local-variable 'diff-hunk-header-re)
+       (concat "^Binary files .* differ$\\|" diff-hunk-header-re)))
+                            
 
 (defun git-whatsnew (&optional same-window filename)
   "Prints a list of all the changes in the current repo, and
@@ -206,7 +220,8 @@ allows some or all of the changes to be staged and/or committed."
   (if (= (point-min) (point-max))
     (let ((inhibit-read-only t))
       (insert "No changes.")))
-  (goto-char (point-min)))
+  (goto-char (point-min))
+  (git-diff-flag-binaries))
 
 (defun git-apply-buffer-diff (&rest options)
   "Call git apply on the current buffer's diff with OPTIONS."
@@ -244,6 +259,63 @@ allows some or all of the changes to be staged and/or committed."
   (interactive)
   (git-apply-buffer-diff "--cached")
   (git-whatsnew t git-whatsnew-target-file))
+
+
+;;;; ------- binary file handling
+
+(defvar git-binary-diff-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map git-diff-map)
+    (define-key map [?d] 'git-binary-kill)
+    (define-key map [?D] 'git-binary-kill)
+    (define-key map [?s] 'git-binary-no-split)
+    map))
+
+(defun git-binary-kill ()
+  (interactive)
+  (when (get-char-property (point) 'binary-file)
+    (let ((inhibit-read-only t)
+          (s (or (previous-single-property-change (point) 'binary-file)
+                 (point-min)))
+          (e (or (next-single-property-change (point) 'binary-file)
+                 (point-max))))
+      (kill-region s e))))
+
+(defun git-binary-no-split ()
+  (interactive)
+  (message "Splitting binary files is not supported"))
+
+(defun git-diff-flag-binaries ()
+  (save-excursion
+    (goto-char (point-min))
+    (let ((fs nil)
+          (current-fname nil)
+          (current-binary nil)
+          (diff-re "^diff --git a/\\(.*\\) b/\\(.*\\)$")
+          (binary-re "^Binary files .* differ$"))
+      (when (looking-at diff-re)
+        (setq fs (match-beginning 0)
+              current-fname (match-string 1)))
+      (while (zerop (forward-line))
+        (cond
+          ;; Flag based on opaque "binary files diff"
+          ((looking-at binary-re)
+           (setq current-binary t))
+
+          ;; TODO: flag based on filename
+          
+          ;; Looking at a file diff line means time to flush anything we've been accumulating
+          ((looking-at diff-re)
+           (when current-binary
+             (let ((inhibit-read-only t))
+               (add-text-properties fs (point)
+                                    (list 'face 'highlight
+                                          'binary-file current-fname
+                                          'keymap git-binary-diff-map))))
+           (setq fs (match-beginning 0)
+                 current-binary nil
+                 current-fname (match-string 1))))))))
+
 
 ;;;; ------------------------------------- git-staged ------------------------------------
 
